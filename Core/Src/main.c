@@ -133,7 +133,7 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
 	uint32_t read_data = 0;
 	const uint32_t write_data = (data << 8) | (reg_address << 3) | chip_address; // This is what we will write, 32 bits in total.
 
-	//printf("SPI BYTES WRITTEN: 0x%08x \n", write_data);
+	//printf("SPI BYTES WRITTEN: 0x%08x \r\n", write_data);
 
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 0); // Take SEN low to indicate we are sending data
@@ -694,6 +694,9 @@ int main(void)
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
 		Error_Handler();
 	}
+	/* Temporary Stuart code */
+	//init_synthesiser();
+	//set_frequency_hz(3035732439);
 
   /* USER CODE END 2 */
 
