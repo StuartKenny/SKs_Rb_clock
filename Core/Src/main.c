@@ -330,15 +330,21 @@ static void run_sweep() {
 
 		const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
 		if (fo != fo_check) {
+			printf("f0 check failed - point 1!\r\n");
 			Error_Handler();
 		}
 
-		printf("Setting frequency: k=%ld; N=%.17g; NINT=%ld; NFRAC=%ld; f=%.17g Hz\r\n", k,N, NINT, NFRAC, fo);
-		set_frequency(NINT, NFRAC, k, false);
+		//printf("Setting frequency: k=%ld; N=%.17g; NINT=%ld; NFRAC=%ld; f=%.17g Hz\r\n", k,N, NINT, NFRAC, fo);
+		//set_frequency(NINT, NFRAC, k, false);
+		set_frequency(60, 11992019, 1, false); //3.03574GHz measured
+		//set_frequency_hz(3.035732439E9); //temporarily use a fixed frequency
+		//set_frequency_hz(3.0357344390E9); //temporarily use a fixed frequency
+
 
 #ifdef RAMP_DAC
 		dac_val = dac_val + (4096.0/num_points);
 		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
+			printf("DAC setup failed!\r\n");
 			Error_Handler();
 		}
 #endif
@@ -379,6 +385,7 @@ static void set_frequency_hz(const double fo) {
 
 	const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
 	if (fo != fo_check) {
+		printf("f0 check failed! - point2\r\n");
 		Error_Handler();
 	}
 
@@ -434,11 +441,13 @@ static void stop_pop() {
 	/* Timer A is the LASER enable, Timer E is the microwave pulse */
 	if (HAL_HRTIM_WaveformOutputStop(&hhrtim,
 	HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
+		printf("POP failure point A!\r\n");
 		Error_Handler();
 	}
 
 	if (HAL_HRTIM_WaveformCounterStop_IT(&hhrtim,
 	HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E) != HAL_OK) {
+		printf("POP failure point B!\r\n");
 		Error_Handler();
 	}
 
@@ -455,6 +464,7 @@ static void start_pop() {
 	/* Timer A is the LASER enable, Timer E is the microwave pulse */
 	if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
 	HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
+		printf("Failed to start POP!\r\n");
 		Error_Handler();
 	}
 
@@ -463,6 +473,7 @@ static void start_pop() {
 	if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
 	HRTIM_TIMERINDEX_TIMER_A,
 	HRTIM_OUTPUT_TA2, HRTIM_OUTPUTLEVEL_INACTIVE) != HAL_OK) {
+		printf("POP failure point C!\r\n");
 		Error_Handler();
 	}
 
@@ -471,6 +482,7 @@ static void start_pop() {
 	if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
 	HRTIM_TIMERINDEX_TIMER_A,
 	HRTIM_OUTPUT_TA2, HRTIM_OUTPUTLEVEL_ACTIVE) != HAL_OK) {
+		printf("POP failure point D!\r\n");
 		Error_Handler();
 	}
 
@@ -478,6 +490,7 @@ static void start_pop() {
 
 	if (HAL_HRTIM_WaveformCounterStart_IT(&hhrtim,
 	HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E) != HAL_OK) {
+		printf("POP failure point E!\r\n");
 		Error_Handler();
 	}
 
@@ -503,10 +516,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	/* Start the DAC and zero its output */
 	if (!dac_enabled) {
 		if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
+			printf("Failure point F!\r\n");
 			Error_Handler();
 		}
 		if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0)
 				!= HAL_OK) {
+			printf("Failure point G!\r\n");
 			Error_Handler();
 		}
 		dac_enabled = true;
@@ -524,12 +539,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 #endif
 
 	if (GPIO_Pin == GPIO_PIN_13) { // Blue button
+		printf("Blue button pressed....\r\n");
 
 		/* If the button is held down for more than one second then run the POP cycle */
 		HAL_Delay(1000);
 
 		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) {
-
+			printf("Long press\r\n");
 			if (pop_running) {
 				return;
 			}
@@ -537,6 +553,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			start_pop();
 
 		} else {
+			printf("Short press\r\n");
 			/* We want to run CW so stop the POP cycle if it's running */
 			if (pop_running) {
 				stop_pop();
@@ -550,12 +567,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			/* Enable the AOM drive power */
 			if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
 			HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
+				printf("Failure point H!\r\n");
 				Error_Handler();
 			}
 
 			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
 					HRTIM_TIMERINDEX_TIMER_A,
 					HRTIM_OUTPUT_TA1, HRTIM_OUTPUTLEVEL_INACTIVE) != HAL_OK) {
+				printf("Failure point I!\r\n");
 				Error_Handler();
 			}
 
@@ -563,6 +582,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
 					HRTIM_TIMERINDEX_TIMER_E,
 					HRTIM_OUTPUT_TE1, HRTIM_OUTPUTLEVEL_ACTIVE) != HAL_OK) {
+				printf("Failure point J!\r\n");
 				Error_Handler();
 			};
 
@@ -692,6 +712,7 @@ int main(void)
 
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
+		printf("Failed to start slow fashing LED!\r\n");
 		Error_Handler();
 	}
 	/* Temporary Stuart code */
@@ -1318,12 +1339,14 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
 	__disable_irq();
 
+	printf("Error handler routine called\r\n");
+
 	/* Disable the AOM */
 	HAL_HRTIM_WaveformOutputStop(&hhrtim, HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1);
 	HAL_HRTIM_WaveformCounterStop_IT(&hhrtim, HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E);
 
 	/* Power down the synthesiser */
-	HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0);
+	//HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0);
 
 	while (1) {
 		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
