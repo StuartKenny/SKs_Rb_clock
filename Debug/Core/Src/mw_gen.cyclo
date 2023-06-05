@@ -1,0 +1,7 @@
+mw_gen.c:49:17:synth_writereg	4
+mw_gen.c:87:17:synth_readreg	1
+mw_gen.c:96:10:init_synthesiser	2
+mw_gen.c:152:19:check_lock	3
+mw_gen.c:171:13:set_frequency	9
+mw_gen.c:210:6:set_frequency_hz	5
+mw_gen.c:245:6:run_sweep	2
