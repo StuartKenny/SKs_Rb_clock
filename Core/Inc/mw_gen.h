@@ -43,7 +43,6 @@ typedef struct {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-//extern SweepSettings sweep_settings;
 
 /* USER CODE END EC */
 

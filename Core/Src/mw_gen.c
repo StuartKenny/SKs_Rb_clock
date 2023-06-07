@@ -12,7 +12,9 @@
 /* Private define ------------------------------------------------------------*/
 
 #define SYNTH_ENABLE
-#define MW_F_CHECK
+//#define SPI_DEBUG
+//#define MW_F_CHECK
+#define MW_VERBOSE
 //#define RAMP_DAC // Use a DAC output to indiciate the MW frequecny
 
 /* Private variables ---------------------------------------------------------*/
@@ -20,18 +22,22 @@ static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
 static const uint32_t LOCK_WAIT_US = 10; // 100 us
-static const uint32_t DWELL_TIME_US = 100; // 1 ms
+//static const uint32_t DWELL_TIME_US = 100; // 100us
+//static const uint32_t DWELL_TIME_US = 5960; // 5.96ms for 10s ramp (12.7s in practice)
+static const uint32_t DWELL_TIME_US = 59600; // 59.6ms for 100s ramp (102s in practice)
 //static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
-SweepSettings const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) };
-//const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) };
-//extern struct SweepSettings {
-//	const double req_start_freq;
-//	const double req_stop_freq;
-//	const double step_size;
-//} const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) };
+static const bool AUTO_MUTE = false; //0 is disabled, 1 is enabled
+
+//MW sweep settings have been selected so that all values can be represented exactly as binary fractions
+//For 5kHz sweep, 2.98Hz step, centred around 3.035736939GHz
+//SweepSettings const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) };
+//For 10kHz sweep, 5.96Hz step, centred around 3.035736939GHz
+//SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 23)) };
+//For 10kHz sweep, 190.7Hz step, centred around 3.035736939GHz
+SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 18)) };
 
 /* Private function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify);
@@ -50,9 +56,9 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
 
 	uint32_t read_data = 0;
 	const uint32_t write_data = (data << 8) | (reg_address << 3) | chip_address; // This is what we will write, 32 bits in total.
-
-	//printf("SPI BYTES WRITTEN: 0x%08x \r\n", write_data);
-
+#ifdef SPI_DEBUG
+	printf("SPI BYTES WRITTEN: 0x%08x \r\n", write_data);
+#endif
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 0); // Take SEN low to indicate we are sending data
 
@@ -122,11 +128,15 @@ uint32_t init_synthesiser() {
 	read_data = synth_readreg(0x17); // Get the current value of the modes register
 	read_data |= (0x1UL << 9);     // Enable single ended output for LO2 (LO2_P)
 	synth_writereg(read_data, 0x17, 0x0, true); // Send
+#ifdef MW_VERBOSE
+	printf("PROGRAMMED MODE REGISTER: 0x%8x \r\n", read_data);
+#endif
 
-	/* Disable auto mute */
-	//read_data = synth_readreg(0x17);
-	//read_data  &= ~(0x1UL << 7);
-	//synth_writereg(read_data, 0x17, 0x0, true); // Send
+	/* Set auto mute */
+	read_data = synth_readreg(0x17);
+	//read_data  &= ~(0x1UL << 7); disables auto_mute
+	read_data  &= ~(AUTO_MUTE << 7);
+	synth_writereg(read_data, 0x17, 0x0, true); // Send
 
 	/* Update lock detect window */
 	//read_data = synth_readreg(0x7); // Get the current value.
@@ -135,14 +145,27 @@ uint32_t init_synthesiser() {
 	//synth_writereg(read_data, 0x07, 0x0, true); // Update the VCO divide register.
 
 	synth_writereg(1, 0x02, 0x0, true); // Reference divider setting.
+#ifdef MW_VERBOSE
+	printf("PROGRAMMED DIVIDER REGISTER: 0x%8x \r\n", read_data);
+#endif
 
 	/* Lock detect training: This must be done after any change to the PD
 	 * reference frequency or after power cycle. */
-	read_data = synth_readreg(0x16); // Get the current value
+	read_data = synth_readreg(0x16); // Get the current value - Simon's code, bug??
+#ifdef MW_VERBOSE
+	printf("READ GAIN DIVIDER REGISTER: 0x%8x \r\n", read_data);
+#endif
+	//read_data = synth_readreg(0x07); // Get the current value
+#ifdef MW_VERBOSE
+	//printf("READ LOCK DETECT REGISTER: 0x%8x \r\n", read_data);
+#endif
 	read_data |= (0x1UL << 11);      // Enable lock-detect counters.
 	read_data |= (0x1UL << 14);      // Enable the lock-detect timer.
 	read_data |= (0x1UL << 20);      // Train the lock-detect timer.
 	synth_writereg(read_data, 0x07, 0x0, true); // Send
+#ifdef MW_VERBOSE
+	printf("PROGRAMMED LOCK DETECT REGISTER: 0x%8x \r\n", read_data);
+#endif
 	HAL_Delay(10); // Wait 10 ms for training to complete, not sure if we really need to do this.
 
 	return SUCCESS;
@@ -227,18 +250,21 @@ void set_frequency_hz(const double fo) {
 	const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
 
 #ifdef MW_F_CHECK
+	//checks that the frequency requested can be exactly represented as a binary value
+	//enters error loop with message if unsuccessful
 	const double fo_error = fo - fo_check;
 	//add "-u _printf_float" to GCC linker flags to enable printf float support
 	printf("Frequency requested: %.17g Hz\r\n", fo);
 	printf("Setting frequency: k=%ld; N=%.17g; NINT=%ld; NFRAC=%ld\r\n", k,N, NINT, NFRAC);
 	printf("Frequency error: %.4g Hz\r\n", fo_error);
-	if ((fo_error > 3) | (fo_error < -3)) {
+	if (fo != fo_check) {
 		printf("Failed to establish synthesiser frequency accurately\r\n");
 		Error_Handler();
 	}
 #endif
 
-	set_frequency(NINT, NFRAC, k, false);
+	//set_frequency(NINT, NFRAC, k, false);
+	set_frequency(NINT, NFRAC, k, AUTO_MUTE);
 
 }
 
@@ -264,36 +290,8 @@ void run_sweep() {
 	for (uint32_t i = 0; i < num_points; i++) {
 
 		double fo = start_freq + (i * sweep_settings.step_size);
-		//set_frequency_hz(fo);
-		set_frequency_hz(3035732439);
-
-//		/* For the k divider we need to find the smallest even integer or use a max of 62*/
-//		uint32_t k = VCO_MAX_FREQ / fo;
-//
-//		if (k != 1) {
-//			while (k > 62 || k % 2) {
-//				k = k - 1;
-//			}
-//		}
-//
-//		/* Calculate the N division ratio */
-//		const double N = ((fo * k) / REF_FREQ);
-//
-//		/* Extract the fractional and integer parts */
-//		const uint32_t NINT = N;
-//		const uint32_t NFRAC = ((N - NINT) * (1 << 24)) + 0.5;
-//
-//		const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
-//		if (fo != fo_check) {
-//			printf("f0 check failed - point 1!\r\n");
-//			Error_Handler();
-//		}
-//
-//		//printf("Setting frequency: k=%ld; N=%.17g; NINT=%ld; NFRAC=%ld; f=%.17g Hz\r\n", k,N, NINT, NFRAC, fo);
-//		//set_frequency(NINT, NFRAC, k, false);
-//		set_frequency(60, 11992019, 1, false); //3.03574GHz measured
-//		//set_frequency_hz(3.035732439E9); //temporarily use a fixed frequency
-//		//set_frequency_hz(3.0357344390E9); //temporarily use a fixed frequency
+		set_frequency_hz(fo);
+		//set_frequency_hz(3035732439);
 
 
 #ifdef RAMP_DAC
