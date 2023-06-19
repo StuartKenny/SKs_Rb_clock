@@ -15,29 +15,48 @@
 //#define SPI_DEBUG
 //#define MW_F_CHECK
 #define MW_VERBOSE
-//#define RAMP_DAC // Use a DAC output to indiciate the MW frequecny
+//#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
+#define HALT_ON_LOSS_OF_LOCK
+#define VERIFY 1
+#define DONT_VERIFY 0
+
+/* HMC835LP6GE Register addresses */
+#define ID_REGISTER 0x00 //read-only
+#define OPEN_MODE_READ_ADDRESS 0x00 //write-only
+#define REFDIV_REGISTER 0x02
+#define INTEGER_FREQUENCY_REGISTER 0x03
+#define FRACTIONAL_FREQUENCY_REGISTER 0x04
+#define LOCK_DETECT_REGISTER 0x07
+#define ANALOG_EN_REGISTER 0x08
+#define GPOLD_REGISTER 0x12
+#define GAIN_DIVIDER_REGISTER 0x16
+#define MODES_REGISTER 0x17
 
 /* Private variables ---------------------------------------------------------*/
 static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
-static const uint32_t LOCK_WAIT_US = 10; // 100 us
+//static const uint32_t LOCK_WAIT_US = 10; // 10 us SB original definition
+static const uint32_t LOCK_WAIT_US = 150; // 150 us (10 was regularly timing out)
 //static const uint32_t DWELL_TIME_US = 100; // 100us
-//static const uint32_t DWELL_TIME_US = 5960; // 5.96ms for 10s ramp (12.7s in practice)
-static const uint32_t DWELL_TIME_US = 59600; // 59.6ms for 100s ramp (102s in practice)
+//static const uint32_t DWELL_TIME_US = 5960; // 5.96ms x 1679 steps for 10s ramp (12.7s in practice)
+static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
+//static const uint32_t DWELL_TIME_US = 59600; // 59.6ms x 1679 steps for 100s ramp (102s in practice)
 //static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
 static const bool AUTO_MUTE = false; //0 is disabled, 1 is enabled
+//static const double HYPERFINE = 3035736939; //midpoint hyperfine frequency
+static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 3dB between points
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
-//For 5kHz sweep, 2.98Hz step, centred around 3.035736939GHz
-//SweepSettings const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) };
-//For 10kHz sweep, 5.96Hz step, centred around 3.035736939GHz
-//SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 23)) };
+//For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
+//SweepSettings const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) }; //SB original settings
+//For 10kHz sweep, 5.96Hz x 1679 steps, centred around 3.035736939GHz
+SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 23)) };
 //For 10kHz sweep, 190.7Hz step, centred around 3.035736939GHz
-SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 18)) };
+//SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 18)) };
 
 /* Private function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify);
@@ -92,8 +111,8 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
 
 static uint32_t synth_readreg(const uint32_t reg_address){
 
-    synth_writereg(reg_address, 0x0, 0x0, false); // First cycle to send the read address
-    const uint32_t read_data = synth_writereg(reg_address, 0x0, 0x0, false);  // Data returned on the second cycle
+    synth_writereg(reg_address, 0x0, 0x0, DONT_VERIFY); // First cycle to send the read address
+    const uint32_t read_data = synth_writereg(reg_address, 0x0, 0x0, DONT_VERIFY);  // Data returned on the second cycle
 
     return (read_data >> 8); // We only care about the first 24 bits returned.
 
@@ -110,10 +129,13 @@ uint32_t init_synthesiser() {
 
 	HAL_Delay(100); // Wait 100 ms for the supply to stabilise.
 
-	synth_writereg(0x1UL << 5, 0x0, 0x0, false); // Soft reset.
-	synth_writereg(0x41BFFF, 0x08, 0x0, true); // Set the SDO output level to 3.3 Volts
+	//synth_writereg(0x1UL << 5, 0x0, 0x0, false); // Soft reset.
+	//synth_writereg(0x41BFFF, 0x08, 0x0, true); // Set the SDO output level to 3.3 Volts
+	synth_writereg(0x1UL << 5, OPEN_MODE_READ_ADDRESS, 0x0, DONT_VERIFY); // Soft reset.
+	synth_writereg(0x41BFFF, ANALOG_EN_REGISTER, 0x0, VERIFY); // Set the SDO output level to 3.3 Volts
 
-	uint32_t read_data = synth_readreg(0x00); // Read the ID register to check the chip is communicating
+	//uint32_t read_data = synth_readreg(0x00); // Read the ID register to check the chip is communicating
+	uint32_t read_data = synth_readreg(ID_REGISTER); // Read the ID register to check the chip is communicating
 	/* Check we have the correct ID */
 	if (read_data != SYNTH_ID) {
 		HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0); // Disable the main regulator.
@@ -125,18 +147,22 @@ uint32_t init_synthesiser() {
 	printf("HMC835 Detected.\r\n");
 
 	/* Enables Single-Ended output mode for LO2 output */
-	read_data = synth_readreg(0x17); // Get the current value of the modes register
+	//read_data = synth_readreg(0x17); // Get the current value of the modes register
+	read_data = synth_readreg(MODES_REGISTER); // Get the current value of the modes register
 	read_data |= (0x1UL << 9);     // Enable single ended output for LO2 (LO2_P)
-	synth_writereg(read_data, 0x17, 0x0, true); // Send
+	//synth_writereg(read_data, 0x17, 0x0, true); // Send
+	synth_writereg(read_data, MODES_REGISTER, 0x0, VERIFY); // Send
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED MODE REGISTER: 0x%8x \r\n", read_data);
+	printf("PROGRAMMED MODE REGISTER: 0x%8lu \r\n", read_data);
 #endif
 
 	/* Set auto mute */
-	read_data = synth_readreg(0x17);
+	//read_data = synth_readreg(0x17);
+	read_data = synth_readreg(MODES_REGISTER);
 	//read_data  &= ~(0x1UL << 7); disables auto_mute
 	read_data  &= ~(AUTO_MUTE << 7);
-	synth_writereg(read_data, 0x17, 0x0, true); // Send
+	//synth_writereg(read_data, 0x17, 0x0, true); // Send
+	synth_writereg(read_data, MODES_REGISTER, 0x0, VERIFY); // Send
 
 	/* Update lock detect window */
 	//read_data = synth_readreg(0x7); // Get the current value.
@@ -144,30 +170,36 @@ uint32_t init_synthesiser() {
 	//read_data |= 0x07;
 	//synth_writereg(read_data, 0x07, 0x0, true); // Update the VCO divide register.
 
-	synth_writereg(1, 0x02, 0x0, true); // Reference divider setting.
+	//synth_writereg(1, 0x02, 0x0, true); // Reference divider setting.
+	synth_writereg(1, REFDIV_REGISTER, 0x0, VERIFY); // Reference divider setting.
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED DIVIDER REGISTER: 0x%8x \r\n", read_data);
+	printf("PROGRAMMED DIVIDER REGISTER: 0x%8lu \r\n", read_data);
 #endif
 
 	/* Lock detect training: This must be done after any change to the PD
 	 * reference frequency or after power cycle. */
-	read_data = synth_readreg(0x16); // Get the current value - Simon's code, bug??
+	//read_data = synth_readreg(0x16); // Get the current value - Simon's code, bug??
+	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value - Simon's code, bug??
+	//read_data = synth_readreg(LOCK_DETECT_REGISTER); // Get contents of lock detect register
 #ifdef MW_VERBOSE
-	printf("READ GAIN DIVIDER REGISTER: 0x%8x \r\n", read_data);
-#endif
-	//read_data = synth_readreg(0x07); // Get the current value
-#ifdef MW_VERBOSE
-	//printf("READ LOCK DETECT REGISTER: 0x%8x \r\n", read_data);
+	printf("READ GAIN DIVIDER REGISTER: 0x%8lu \r\n", read_data);
+	//printf("READ LOCK_DETECT_REGISTER: 0x%8lu \r\n", read_data);
 #endif
 	read_data |= (0x1UL << 11);      // Enable lock-detect counters.
 	read_data |= (0x1UL << 14);      // Enable the lock-detect timer.
 	read_data |= (0x1UL << 20);      // Train the lock-detect timer.
-	synth_writereg(read_data, 0x07, 0x0, true); // Send
+	//synth_writereg(read_data, 0x07, 0x0, true); // Send
+	synth_writereg(read_data, LOCK_DETECT_REGISTER, 0x0, VERIFY); // Send
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED LOCK DETECT REGISTER: 0x%8x \r\n", read_data);
+	printf("PROGRAMMED LOCK DETECT REGISTER: 0x%8lu \r\n", read_data);
 #endif
 	HAL_Delay(10); // Wait 10 ms for training to complete, not sure if we really need to do this.
 
+	/* Program LO2 output gain */
+	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
+	read_data &= 0xFFFFFCFF; 		// Zero bits 8:9.
+	read_data |= (LO2GAIN << 8);	// Set LO2GAIN value.
+	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 	return SUCCESS;
 
 }
@@ -180,7 +212,9 @@ static const bool check_lock(uint32_t timeout) {
 	uint32_t start = start_timer(FAST_TIMER);
 
 	while ((FAST_TIMER->CNT - start) < timeout) {
-		locked = synth_readreg(0x12) & (1UL << 1);
+		//printf("Debug lock while condition\r\n");
+		//locked = synth_readreg(0x12) & (1UL << 1);
+		locked = synth_readreg(GPOLD_REGISTER) & (1UL << 1);
 		if (locked) {
 			stop_timer(FAST_TIMER);
 			return true;
@@ -199,33 +233,41 @@ static void set_frequency(const uint32_t integer, const uint32_t fraction, const
 
 	if (mute) {
 		/* Mute the outputs */
-		read_data = synth_readreg(0x16); // Get the current value.
+		//read_data = synth_readreg(0x16); // Get the current value.
+		read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
 		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
-		synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
+		//synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
+		synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 	}
 
 	if (last_integer == -1 || (last_integer != integer)) {
-		synth_writereg(integer, 0x03, 0x0, true);   // Integer register.
+		//synth_writereg(integer, 0x03, 0x0, true);   // Integer register.
+		synth_writereg(integer, INTEGER_FREQUENCY_REGISTER, 0x0, VERIFY);   // Integer register.
 		last_integer = integer;
 	}
 
 	if (last_fraction == -1 || (last_fraction != fraction)) {
-		synth_writereg(fraction, 0x04, 0x0, true);  // Fractional register.
+		//synth_writereg(fraction, 0x04, 0x0, true);  // Fractional register.
+		synth_writereg(fraction, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  // Fractional register.
 		last_fraction = fraction;
 	}
 
 	if (last_vcodiv == -1 || (last_vcodiv != vco_divider)) {
-		read_data = synth_readreg(0x16); // Get the current value.
+		//read_data = synth_readreg(0x16); // Get the current value.
+		read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
 		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
 		read_data |= vco_divider; // This will un-mute the outputs */
-		synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
+		//synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
+		synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 		last_vcodiv = vco_divider;
 	}
 
 	if (!check_lock(LOCK_WAIT_US)) {
 		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-		printf("Lock failed!\r\n");
+		printf("Lock failed within set_frequency!\r\n");
+#ifdef HALT_ON_LOSS_OF_LOCK
 		Error_Handler();
+#endif //HALT_ON_LOSS_OF_LOCK
 	}
 
 }
@@ -247,11 +289,11 @@ void set_frequency_hz(const double fo) {
 	/* Extract the fractional and integer parts */
 	const uint32_t NINT = N;
 	const uint32_t NFRAC = ((N - NINT) * (1 << 24)) + 0.5;
-	const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
 
 #ifdef MW_F_CHECK
 	//checks that the frequency requested can be exactly represented as a binary value
 	//enters error loop with message if unsuccessful
+	const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
 	const double fo_error = fo - fo_check;
 	//add "-u _printf_float" to GCC linker flags to enable printf float support
 	printf("Frequency requested: %.17g Hz\r\n", fo);
@@ -308,7 +350,7 @@ void run_sweep() {
 
 	__enable_irq();
 
-	printf("Total Points: %lu; s\r\n", num_points);
+	printf("Total Points: %lu\r\n", num_points);
 
 #ifdef RAMP_DAC
 	/* Zero and stop the DAC */
