@@ -23,7 +23,8 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+#define ATTENUATOR_CODE //AOM attenuator related code
+#ifdef ATTENUATOR_CODE
 struct AttenuatorSettings
 {
     const GPIO_PinState ATT_0DB25 : 1;  // 1-bit unsigned field: 0.25 dB
@@ -34,6 +35,7 @@ struct AttenuatorSettings
     const GPIO_PinState ATT_8DB : 1;  // 1-bit unsigned field: 8 dB
     const GPIO_PinState ATT_16DB : 1;  // 1-bit unsigned field: 16 dB
 };
+#endif //ATTENUATOR_CODE
 
 /* USER CODE END PTD */
 
@@ -43,8 +45,6 @@ struct AttenuatorSettings
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define SYNTH_ENABLE
 #define POP_START_PULSE
-#define MW_F_CHECK
-//#define RAMP_DAC // Use a DAC output to indiciate the MW frequecny
 
 /* USER CODE END PD */
 
@@ -99,9 +99,11 @@ extern void run_sweep();
 __attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
-__attribute__((section(".itcm"))) static void set_aom_atten(const struct AttenuatorSettings a);
 __attribute__((section(".itcm"))) static void start_pop();
 __attribute__((section(".itcm"))) static void stop_pop();
+#ifdef ATTENUATOR_CODE
+__attribute__((section(".itcm"))) static void set_aom_atten(const struct AttenuatorSettings a);
+#endif //ATTENUATOR_CODE
 
 /* USER CODE END PFP */
 
@@ -113,8 +115,8 @@ PUTCHAR_PROTOTYPE {
 	return ch;
 }
 
+#ifdef ATTENUATOR_CODE
 static void set_aom_atten(const struct AttenuatorSettings a) {
-
 	HAL_GPIO_WritePin(ATT_LE_GPIO_Port, ATT_LE_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(ATT_025_GPIO_Port, ATT_025_Pin, a.ATT_0DB25);
 	HAL_GPIO_WritePin(ATT_05_GPIO_Port, ATT_05_Pin, a.ATT_0DB5);
@@ -123,8 +125,8 @@ static void set_aom_atten(const struct AttenuatorSettings a) {
 	HAL_GPIO_WritePin(ATT_4_GPIO_Port, ATT_4_Pin, a.ATT_4DB);
 	HAL_GPIO_WritePin(ATT_8_GPIO_Port, ATT_8_Pin, a.ATT_8DB);
 	HAL_GPIO_WritePin(ATT_16_GPIO_Port, ATT_16_Pin, a.ATT_16DB);
-
 }
+#endif //ATTENUATOR_CODE
 
 uint32_t start_timer(TIM_TypeDef * timer) {
 
@@ -280,9 +282,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 				return;
 			}
 
+#ifdef ATTENUATOR_CODE
 			/* Set the attenuator for minimum attenuation */
 			const struct AttenuatorSettings attenuator_settings = {0,0,0,0,0,0,0}; // 0 dB
 			set_aom_atten(attenuator_settings);
+#endif //ATTENUATOR_CODE
 
 			/* Enable the AOM drive power */
 			if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
@@ -327,9 +331,11 @@ void HAL_HRTIM_Compare2EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Timer
 
 	/* Called when the first microwave pulse goes low */
 	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_E) {
+#ifdef ATTENUATOR_CODE
 		/* Configure the LASER AOM drive attenuator */
 		const struct AttenuatorSettings a = {0,0,0,0,0,1,0}; // 8 dB
 		set_aom_atten(a);
+#endif //ATTENUATOR_CODE
 	}
 
 }
@@ -338,10 +344,11 @@ void HAL_HRTIM_Compare3EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Timer
 
 	/* Called at the end of a POP cycle */
 	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_A) {
-
+#ifdef ATTENUATOR_CODE
 		/* Reset the attenuator to 0 dB */
 		const struct AttenuatorSettings a = { 0, 0, 0, 0, 0, 0, 0 }; // 0 dB
 		set_aom_atten(a);
+#endif //ATTENUATOR_CODE
 
 		const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
 		const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
@@ -438,9 +445,6 @@ int main(void)
 		printf("Failed to start slow fashing LED!\r\n");
 		Error_Handler();
 	}
-	/* Temporary Stuart code */
-	//init_synthesiser();
-	//set_frequency_hz(3035732439);
 
   /* USER CODE END 2 */
 

@@ -37,7 +37,7 @@ static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
 //static const uint32_t LOCK_WAIT_US = 10; // 10 us SB original definition
-static const uint32_t LOCK_WAIT_US = 150; // 150 us (10 was regularly timing out)
+static const uint32_t LOCK_WAIT_US = 1000; // 1ms (10us was regularly timing out)
 //static const uint32_t DWELL_TIME_US = 100; // 100us
 //static const uint32_t DWELL_TIME_US = 5960; // 5.96ms x 1679 steps for 10s ramp (12.7s in practice)
 static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
@@ -46,8 +46,8 @@ static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processi
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
-static const bool AUTO_MUTE = false; //0 is disabled, 1 is enabled
-//static const double HYPERFINE = 3035736939; //midpoint hyperfine frequency
+static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
+static const double HYPERFINE = 3035736939; //midpoint hyperfine frequency
 static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 3dB between points
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
@@ -179,11 +179,11 @@ uint32_t init_synthesiser() {
 	/* Lock detect training: This must be done after any change to the PD
 	 * reference frequency or after power cycle. */
 	//read_data = synth_readreg(0x16); // Get the current value - Simon's code, bug??
-	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value - Simon's code, bug??
-	//read_data = synth_readreg(LOCK_DETECT_REGISTER); // Get contents of lock detect register
+	//read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value - Simon's code, bug??
+	read_data = synth_readreg(LOCK_DETECT_REGISTER); // Get contents of lock detect register
 #ifdef MW_VERBOSE
-	printf("READ GAIN DIVIDER REGISTER: 0x%8lu \r\n", read_data);
-	//printf("READ LOCK_DETECT_REGISTER: 0x%8lu \r\n", read_data);
+	//printf("READ GAIN DIVIDER REGISTER: 0x%8lu \r\n", read_data);
+	printf("READ LOCK_DETECT_REGISTER: 0x%8lu \r\n", read_data);
 #endif
 	read_data |= (0x1UL << 11);      // Enable lock-detect counters.
 	read_data |= (0x1UL << 14);      // Enable the lock-detect timer.
@@ -200,6 +200,9 @@ uint32_t init_synthesiser() {
 	read_data &= 0xFFFFFCFF; 		// Zero bits 8:9.
 	read_data |= (LO2GAIN << 8);	// Set LO2GAIN value.
 	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
+#ifdef MW_VERBOSE
+	printf("PROGRAMMED GAIN DIVIDER REGISTER: 0x%8lu \r\n", read_data);
+#endif
 	return SUCCESS;
 
 }
@@ -332,8 +335,8 @@ void run_sweep() {
 	for (uint32_t i = 0; i < num_points; i++) {
 
 		double fo = start_freq + (i * sweep_settings.step_size);
-		set_frequency_hz(fo);
-		//set_frequency_hz(3035732439);
+		//set_frequency_hz(fo);
+		set_frequency_hz(HYPERFINE); //Ignores ramped MW frequency and uses hyperfine frequency
 
 
 #ifdef RAMP_DAC

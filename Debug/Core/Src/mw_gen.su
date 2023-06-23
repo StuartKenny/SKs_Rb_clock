@@ -1,7 +1,7 @@
 ../Core/Src/mw_gen.c:74:17:synth_writereg	48	static
 ../Core/Src/mw_gen.c:112:17:synth_readreg	24	static
 ../Core/Src/mw_gen.c:121:10:init_synthesiser	16	static
-../Core/Src/mw_gen.c:207:19:check_lock	24	static
-../Core/Src/mw_gen.c:228:13:set_frequency	32	static
-../Core/Src/mw_gen.c:275:6:set_frequency_hz	40	static
-../Core/Src/mw_gen.c:313:6:run_sweep	24	static,ignoring_inline_asm
+../Core/Src/mw_gen.c:210:19:check_lock	24	static
+../Core/Src/mw_gen.c:231:13:set_frequency	32	static
+../Core/Src/mw_gen.c:278:6:set_frequency_hz	40	static
+../Core/Src/mw_gen.c:316:6:run_sweep	24	static,ignoring_inline_asm
