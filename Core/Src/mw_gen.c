@@ -17,7 +17,6 @@
 #define MW_VERBOSE
 //#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
 #define HALT_ON_LOSS_OF_LOCK
-#define SINGLE_MW_FREQUENCY //MW generator creates single frequency rather than ramp.
 #define VERIFY 1 //constant, don't touch
 #define DONT_VERIFY 0 //constant, don't touch
 
@@ -48,12 +47,10 @@ static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
 static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
-static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 3dB between points
-//max is -41dBm output, min is -50dBm out.
-
-#ifdef SINGLE_MW_FREQUENCY
+static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB between points
+//max is +5dBm output, min is -1dBm out.
+//NOTE - these values are measured and not consistent with datasheet
 static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
-#endif //SINGLE_MW_FREQUENCY
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
@@ -168,7 +165,7 @@ uint32_t init_synthesiser() {
 
 	synth_writereg(1, REFDIV_REGISTER, 0x0, VERIFY); // Reference divider setting.
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED DIVIDER REGISTER: 0x%lX \r\n", read_data);
+	printf("PROGRAMMED DIVIDER REGISTER: 0x01 \r\n");
 #endif
 
 	/* Lock detect training: This must be done after any change to the PD
@@ -193,9 +190,13 @@ uint32_t init_synthesiser() {
 	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 #ifdef MW_VERBOSE
 	printf("PROGRAMMED GAIN DIVIDER REGISTER: 0x%lX \r\n", read_data);
+	printf("LO2 gain setting: %u \r\n", LO2GAIN);
 #endif
-	return SUCCESS;
 
+	/* Sets output frequency to the hyperfine value */
+	set_frequency_hz(HYPERFINE);
+	printf("Single frequency output: %f Hz \r\n", HYPERFINE);
+	return SUCCESS;
 }
 
 static const bool check_lock(uint32_t timeout) {
@@ -299,7 +300,6 @@ void set_frequency_hz(const double fo) {
 	}
 #endif
 
-	//set_frequency(NINT, NFRAC, k, false);
 	set_frequency(NINT, NFRAC, k, AUTO_MUTE);
 
 }
@@ -307,12 +307,6 @@ void set_frequency_hz(const double fo) {
 void run_sweep() {
 
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
-
-#ifdef SINGLE_MW_FREQUENCY
-	set_frequency_hz(HYPERFINE); //Ignores ramped MW frequency and uses hyperfine frequency
-	printf("Single frequency output: %f Hz \r\n", HYPERFINE);
-	return;
-#endif //SINGLE_MW_FREQUENCY
 
 #ifdef RAMP_DAC
 	/* Zero the DAC output */

@@ -224,7 +224,7 @@ static void start_pop() {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
-	static bool synth_init = false;
+//	static bool synth_init = false; Simon declared here but I've included in main.c private variables
 
 
 #ifdef RAMP_DAC
@@ -250,15 +250,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 #endif
 
-#ifdef SYNTH_ENABLE
-	if (!synth_init) {
-		if (init_synthesiser() != SUCCESS) {
-			printf("Synthesiser initialisation failed!\r\n");
-			Error_Handler();
-		}
-		synth_init = true;
-	}
-#endif
+//#ifdef SYNTH_ENABLE
+//	if (!synth_init) {
+//		if (init_synthesiser() != SUCCESS) {
+//			printf("Synthesiser initialisation failed!\r\n");
+//			Error_Handler();
+//		}
+//		synth_init = true;
+//	}
+//#endif
 
 	if (GPIO_Pin == GPIO_PIN_13) { // Blue button
 		printf("Blue button pressed....\r\n");
@@ -315,7 +315,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			while (1) {
 				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
 				run_sweep();
-				while(1); //infinite loop to temporarily stop program
 				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
 				printf("Sweep complete.\r\n");
 			}
@@ -440,6 +439,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
+
+#ifdef SYNTH_ENABLE
+	if (init_synthesiser() != SUCCESS) {
+		printf("Synthesiser initialisation failed!\r\n");
+		Error_Handler();
+	}
+#endif
 
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
