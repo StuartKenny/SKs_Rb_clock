@@ -23,7 +23,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-#define ATTENUATOR_CODE //AOM attenuator related code
+#define ATTENUATOR_CODE //include code related to AOM attenuator (SBJK clock)
 #ifdef ATTENUATOR_CODE
 struct AttenuatorSettings
 {
@@ -175,7 +175,7 @@ static void stop_pop() {
 
 	pop_cycle_count = 0;
 	pop_running = false;
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0);
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0); //turn off amber LED
 
 	printf("POP cycle stopped!\r\n");
 
@@ -311,11 +311,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			};
 
 			/* Run the frequency sweep */
+			printf("Initiating sweep.\r\n");
 			while (1) {
-				printf("Sweep running.\r\n");
-				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
 				run_sweep();
-				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+				while(1); //infinite loop to temporarily stop program
+				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
 				printf("Sweep complete.\r\n");
 			}
 		}
@@ -324,7 +325,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 }
 
 void HAL_LPTIM_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim){
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin); //toggle green LED
 }
 
 void HAL_HRTIM_Compare2EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx) {
@@ -372,7 +373,7 @@ void HAL_HRTIM_Compare3EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Timer
 		i = i + 1;
 
 		pop_cycle_count = pop_cycle_count + 1;
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin); //toggle amber LED
 		printf("POP Cycle %lu done.\r\n", pop_cycle_count);
 
 	}
@@ -1076,7 +1077,7 @@ void Error_Handler(void)
 	HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0);
 
 	while (1) {
-		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); //toggle red LED
 		timer_delay(SLOW_TIMER, ERROR_LED_DELAY);
 	}
   /* USER CODE END Error_Handler_Debug */

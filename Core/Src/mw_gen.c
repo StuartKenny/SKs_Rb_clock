@@ -17,8 +17,9 @@
 #define MW_VERBOSE
 //#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
 #define HALT_ON_LOSS_OF_LOCK
-#define VERIFY 1
-#define DONT_VERIFY 0
+#define SINGLE_MW_FREQUENCY //MW generator creates single frequency rather than ramp.
+#define VERIFY 1 //constant, don't touch
+#define DONT_VERIFY 0 //constant, don't touch
 
 /* HMC835LP6GE Register addresses */
 #define ID_REGISTER 0x00 //read-only
@@ -47,8 +48,12 @@ static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
 static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
-static const double HYPERFINE = 3035736939; //midpoint hyperfine frequency
 static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 3dB between points
+//max is -41dBm output, min is -50dBm out.
+
+#ifdef SINGLE_MW_FREQUENCY
+static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
+#endif //SINGLE_MW_FREQUENCY
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
@@ -76,7 +81,7 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
 	uint32_t read_data = 0;
 	const uint32_t write_data = (data << 8) | (reg_address << 3) | chip_address; // This is what we will write, 32 bits in total.
 #ifdef SPI_DEBUG
-	printf("SPI BYTES WRITTEN: 0x%08x \r\n", write_data);
+	printf("SPI BYTES WRITTEN: 0x%X \r\n", write_data);
 #endif
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 0); // Take SEN low to indicate we are sending data
@@ -120,7 +125,7 @@ static uint32_t synth_readreg(const uint32_t reg_address){
 
 uint32_t init_synthesiser() {
 
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off the lock LED
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off the amber lock LED
 
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 1);
@@ -129,12 +134,9 @@ uint32_t init_synthesiser() {
 
 	HAL_Delay(100); // Wait 100 ms for the supply to stabilise.
 
-	//synth_writereg(0x1UL << 5, 0x0, 0x0, false); // Soft reset.
-	//synth_writereg(0x41BFFF, 0x08, 0x0, true); // Set the SDO output level to 3.3 Volts
 	synth_writereg(0x1UL << 5, OPEN_MODE_READ_ADDRESS, 0x0, DONT_VERIFY); // Soft reset.
 	synth_writereg(0x41BFFF, ANALOG_EN_REGISTER, 0x0, VERIFY); // Set the SDO output level to 3.3 Volts
 
-	//uint32_t read_data = synth_readreg(0x00); // Read the ID register to check the chip is communicating
 	uint32_t read_data = synth_readreg(ID_REGISTER); // Read the ID register to check the chip is communicating
 	/* Check we have the correct ID */
 	if (read_data != SYNTH_ID) {
@@ -147,22 +149,16 @@ uint32_t init_synthesiser() {
 	printf("HMC835 Detected.\r\n");
 
 	/* Enables Single-Ended output mode for LO2 output */
-	//read_data = synth_readreg(0x17); // Get the current value of the modes register
 	read_data = synth_readreg(MODES_REGISTER); // Get the current value of the modes register
+#ifdef MW_VERBOSE
+	printf("READ MODES REGISTER: 0x%lX \r\n", read_data);
+#endif
 	read_data |= (0x1UL << 9);     // Enable single ended output for LO2 (LO2_P)
-	//synth_writereg(read_data, 0x17, 0x0, true); // Send
+	read_data  &= ~(AUTO_MUTE << 7); //can disable auto_mute - see variable declarations
 	synth_writereg(read_data, MODES_REGISTER, 0x0, VERIFY); // Send
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED MODE REGISTER: 0x%8lu \r\n", read_data);
+	printf("PROGRAMMED MODES REGISTER: 0x%lX \r\n", read_data);
 #endif
-
-	/* Set auto mute */
-	//read_data = synth_readreg(0x17);
-	read_data = synth_readreg(MODES_REGISTER);
-	//read_data  &= ~(0x1UL << 7); disables auto_mute
-	read_data  &= ~(AUTO_MUTE << 7);
-	//synth_writereg(read_data, 0x17, 0x0, true); // Send
-	synth_writereg(read_data, MODES_REGISTER, 0x0, VERIFY); // Send
 
 	/* Update lock detect window */
 	//read_data = synth_readreg(0x7); // Get the current value.
@@ -170,28 +166,23 @@ uint32_t init_synthesiser() {
 	//read_data |= 0x07;
 	//synth_writereg(read_data, 0x07, 0x0, true); // Update the VCO divide register.
 
-	//synth_writereg(1, 0x02, 0x0, true); // Reference divider setting.
 	synth_writereg(1, REFDIV_REGISTER, 0x0, VERIFY); // Reference divider setting.
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED DIVIDER REGISTER: 0x%8lu \r\n", read_data);
+	printf("PROGRAMMED DIVIDER REGISTER: 0x%lX \r\n", read_data);
 #endif
 
 	/* Lock detect training: This must be done after any change to the PD
 	 * reference frequency or after power cycle. */
-	//read_data = synth_readreg(0x16); // Get the current value - Simon's code, bug??
-	//read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value - Simon's code, bug??
 	read_data = synth_readreg(LOCK_DETECT_REGISTER); // Get contents of lock detect register
 #ifdef MW_VERBOSE
-	//printf("READ GAIN DIVIDER REGISTER: 0x%8lu \r\n", read_data);
-	printf("READ LOCK_DETECT_REGISTER: 0x%8lu \r\n", read_data);
+	printf("READ LOCK_DETECT_REGISTER: 0x%lX \r\n", read_data);
 #endif
 	read_data |= (0x1UL << 11);      // Enable lock-detect counters.
 	read_data |= (0x1UL << 14);      // Enable the lock-detect timer.
 	read_data |= (0x1UL << 20);      // Train the lock-detect timer.
-	//synth_writereg(read_data, 0x07, 0x0, true); // Send
 	synth_writereg(read_data, LOCK_DETECT_REGISTER, 0x0, VERIFY); // Send
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED LOCK DETECT REGISTER: 0x%8lu \r\n", read_data);
+	printf("PROGRAMMED LOCK DETECT REGISTER: 0x%lX \r\n", read_data);
 #endif
 	HAL_Delay(10); // Wait 10 ms for training to complete, not sure if we really need to do this.
 
@@ -201,7 +192,7 @@ uint32_t init_synthesiser() {
 	read_data |= (LO2GAIN << 8);	// Set LO2GAIN value.
 	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 #ifdef MW_VERBOSE
-	printf("PROGRAMMED GAIN DIVIDER REGISTER: 0x%8lu \r\n", read_data);
+	printf("PROGRAMMED GAIN DIVIDER REGISTER: 0x%lX \r\n", read_data);
 #endif
 	return SUCCESS;
 
@@ -266,7 +257,7 @@ static void set_frequency(const uint32_t integer, const uint32_t fraction, const
 	}
 
 	if (!check_lock(LOCK_WAIT_US)) {
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); //turn off amber LED
 		printf("Lock failed within set_frequency!\r\n");
 #ifdef HALT_ON_LOSS_OF_LOCK
 		Error_Handler();
@@ -317,6 +308,12 @@ void run_sweep() {
 
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
 
+#ifdef SINGLE_MW_FREQUENCY
+	set_frequency_hz(HYPERFINE); //Ignores ramped MW frequency and uses hyperfine frequency
+	printf("Single frequency output: %f Hz \r\n", HYPERFINE);
+	return;
+#endif //SINGLE_MW_FREQUENCY
+
 #ifdef RAMP_DAC
 	/* Zero the DAC output */
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
@@ -335,8 +332,7 @@ void run_sweep() {
 	for (uint32_t i = 0; i < num_points; i++) {
 
 		double fo = start_freq + (i * sweep_settings.step_size);
-		//set_frequency_hz(fo);
-		set_frequency_hz(HYPERFINE); //Ignores ramped MW frequency and uses hyperfine frequency
+		set_frequency_hz(fo);
 
 
 #ifdef RAMP_DAC
