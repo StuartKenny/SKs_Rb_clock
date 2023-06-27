@@ -224,7 +224,7 @@ static void start_pop() {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
-//	static bool synth_init = false; Simon declared here but I've included in main.c private variables
+//	static bool synth_init = false; //Simon declared here but not needed if Hittite initialised in main code.
 
 
 #ifdef RAMP_DAC
@@ -449,7 +449,7 @@ int main(void)
 
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
-		printf("Failed to start slow fashing LED!\r\n");
+		printf("Failed to start slow flashing LED!\r\n");
 		Error_Handler();
 	}
 

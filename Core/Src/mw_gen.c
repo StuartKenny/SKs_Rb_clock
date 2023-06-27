@@ -42,15 +42,19 @@ static const uint32_t LOCK_WAIT_US = 1000; // 1ms (10us was regularly timing out
 //static const uint32_t DWELL_TIME_US = 5960; // 5.96ms x 1679 steps for 10s ramp (12.7s in practice)
 static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
 //static const uint32_t DWELL_TIME_US = 59600; // 59.6ms x 1679 steps for 100s ramp (102s in practice)
+//static const uint32_t DWELL_TIME_US = 1000000; // 1s for accurate spectrum analyser readings
 //static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
-static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
 static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
 static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
+
+/* Mute MW generation whilst changing frequency */
+static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled ***DO NOT ENABLE UNTIL CODE DEBUGGED***
+static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
@@ -65,6 +69,7 @@ __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t 
 __attribute__((section(".itcm"))) static uint32_t synth_readreg(const uint32_t reg_address);
 __attribute__((section(".itcm"))) uint32_t init_synthesiser();
 __attribute__((section(".itcm"))) static const bool check_lock(uint32_t timeout);
+__attribute__((section(".itcm"))) static void mute_mw_outputs();
 __attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
 __attribute__((section(".itcm"))) void set_frequency_hz(const double fo);
 __attribute__((section(".itcm"))) void run_sweep();
@@ -158,10 +163,10 @@ uint32_t init_synthesiser() {
 #endif
 
 	/* Update lock detect window */
-	//read_data = synth_readreg(0x7); // Get the current value.
+	//read_data = synth_readreg(LOCK_DETECT_REGISTER); // Get the current value.
 	//read_data &= 0xFFFFFFF8; // Zero the first 3 LSBs.
 	//read_data |= 0x07;
-	//synth_writereg(read_data, 0x07, 0x0, true); // Update the VCO divide register.
+	//synth_writereg(read_data, LOCK_DETECT_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 
 	synth_writereg(1, REFDIV_REGISTER, 0x0, VERIFY); // Reference divider setting.
 #ifdef MW_VERBOSE
@@ -220,6 +225,15 @@ static const bool check_lock(uint32_t timeout) {
 	return false;
 }
 
+static void mute_mw_outputs() {
+	uint32_t read_data = 0x0;
+
+	/* Mute the outputs by setting k value to zero */
+	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
+	read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
+	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
+}
+
 static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute) {
 
 	static uint32_t last_integer = -1, last_fraction = -1, last_vcodiv = -1;
@@ -227,32 +241,23 @@ static void set_frequency(const uint32_t integer, const uint32_t fraction, const
 	uint32_t read_data = 0x0;
 
 	if (mute) {
-		/* Mute the outputs */
-		//read_data = synth_readreg(0x16); // Get the current value.
-		read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
-		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
-		//synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
-		synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
+		mute_mw_outputs();
 	}
 
 	if (last_integer == -1 || (last_integer != integer)) {
-		//synth_writereg(integer, 0x03, 0x0, true);   // Integer register.
 		synth_writereg(integer, INTEGER_FREQUENCY_REGISTER, 0x0, VERIFY);   // Integer register.
 		last_integer = integer;
 	}
 
 	if (last_fraction == -1 || (last_fraction != fraction)) {
-		//synth_writereg(fraction, 0x04, 0x0, true);  // Fractional register.
 		synth_writereg(fraction, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  // Fractional register.
 		last_fraction = fraction;
 	}
 
-	if (last_vcodiv == -1 || (last_vcodiv != vco_divider)) {
-		//read_data = synth_readreg(0x16); // Get the current value.
+	if (last_vcodiv == -1 || (last_vcodiv != vco_divider) || mute) {
 		read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
 		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
-		read_data |= vco_divider; // This will un-mute the outputs */
-		//synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
+		read_data |= vco_divider; // This will set k which will un-mute the outputs */
 		synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 		last_vcodiv = vco_divider;
 	}
@@ -300,7 +305,7 @@ void set_frequency_hz(const double fo) {
 	}
 #endif
 
-	set_frequency(NINT, NFRAC, k, AUTO_MUTE);
+	set_frequency(NINT, NFRAC, k, MANUAL_MUTE);
 
 }
 
