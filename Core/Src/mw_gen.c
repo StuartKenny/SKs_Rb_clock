@@ -15,7 +15,7 @@
 //#define SPI_DEBUG
 //#define MW_F_CHECK
 #define MW_VERBOSE
-//#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
+#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
 #define HALT_ON_LOSS_OF_LOCK
 #define VERIFY 1 //constant, don't touch
 #define DONT_VERIFY 0 //constant, don't touch
@@ -53,7 +53,7 @@ static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB be
 static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
 
 /* Mute MW generation whilst changing frequency */
-static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled ***DO NOT ENABLE UNTIL CODE DEBUGGED***
+static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
 static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
@@ -63,6 +63,8 @@ static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled
 SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 23)) };
 //For 10kHz sweep, 190.7Hz step, centred around 3.035736939GHz
 //SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 18)) };
+
+extern DAC_HandleTypeDef hdac1; //declared in main.c
 
 /* Private function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify);
@@ -337,7 +339,7 @@ void run_sweep() {
 #ifdef RAMP_DAC
 		dac_val = dac_val + (4096.0/num_points);
 		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
-			printf("DAC setup failed!\r\n");
+			printf("Failure to program value to DAC \r\n");
 			Error_Handler();
 		}
 #endif
@@ -353,7 +355,7 @@ void run_sweep() {
 #ifdef RAMP_DAC
 	/* Zero and stop the DAC */
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
-	HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);
+	//HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);
 #endif
 
 }

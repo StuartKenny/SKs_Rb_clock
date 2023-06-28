@@ -1,8 +1,8 @@
-mw_gen.c:81:17:synth_writereg	4
-mw_gen.c:119:17:synth_readreg	1
-mw_gen.c:128:10:init_synthesiser	2
-mw_gen.c:207:19:check_lock	3
-mw_gen.c:228:13:mute_mw_outputs	1
-mw_gen.c:237:13:set_frequency	10
-mw_gen.c:275:6:set_frequency_hz	4
-mw_gen.c:312:6:run_sweep	2
+mw_gen.c:83:17:synth_writereg	4
+mw_gen.c:121:17:synth_readreg	1
+mw_gen.c:130:10:init_synthesiser	2
+mw_gen.c:209:19:check_lock	3
+mw_gen.c:230:13:mute_mw_outputs	1
+mw_gen.c:239:13:set_frequency	10
+mw_gen.c:277:6:set_frequency_hz	4
+mw_gen.c:314:6:run_sweep	3

@@ -227,28 +227,28 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 //	static bool synth_init = false; //Simon declared here but not needed if Hittite initialised in main code.
 
 
-#ifdef RAMP_DAC
-	static bool dac_enabled = false;
-#endif
+//#ifdef RAMP_DAC
+//	static bool dac_enabled = false;
+//#endif
 
 	SystemClock_Config(); // We were in STOP mode so the HSI is selected.
 	HAL_ResumeTick();
 
-#ifdef RAMP_DAC
-	/* Start the DAC and zero its output */
-	if (!dac_enabled) {
-		if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
-			printf("Failure point F!\r\n");
-			Error_Handler();
-		}
-		if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0)
-				!= HAL_OK) {
-			printf("Failure point G!\r\n");
-			Error_Handler();
-		}
-		dac_enabled = true;
-	}
-#endif
+//#ifdef RAMP_DAC
+//	/* Start the DAC and zero its output */
+//	if (!dac_enabled) {
+//		if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
+//			printf("Failure point F!\r\n");
+//			Error_Handler();
+//		}
+//		if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0)
+//				!= HAL_OK) {
+//			printf("Failure point G!\r\n");
+//			Error_Handler();
+//		}
+//		dac_enabled = true;
+//	}
+//#endif
 
 //#ifdef SYNTH_ENABLE
 //	if (!synth_init) {
@@ -450,6 +450,17 @@ int main(void)
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
 		printf("Failed to start slow flashing LED!\r\n");
+		Error_Handler();
+	}
+
+	/* Start the DAC and zero its output */
+	if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
+		printf("Failure to initialise DAC \r\n");
+		Error_Handler();
+	}
+	printf("Setting DAC output to 1.00V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1241) != HAL_OK){
+		printf("DAC setup failed!\r\n");
 		Error_Handler();
 	}
 
