@@ -5,4 +5,4 @@
 ../Core/Src/mw_gen.c:230:13:mute_mw_outputs	16	static
 ../Core/Src/mw_gen.c:239:13:set_frequency	32	static
 ../Core/Src/mw_gen.c:277:6:set_frequency_hz	40	static
-../Core/Src/mw_gen.c:314:6:run_sweep	32	static,ignoring_inline_asm
+../Core/Src/mw_gen.c:314:6:run_sweep	24	static,ignoring_inline_asm

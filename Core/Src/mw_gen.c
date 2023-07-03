@@ -15,7 +15,7 @@
 //#define SPI_DEBUG
 //#define MW_F_CHECK
 #define MW_VERBOSE
-#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
+//#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
 #define HALT_ON_LOSS_OF_LOCK
 #define VERIFY 1 //constant, don't touch
 #define DONT_VERIFY 0 //constant, don't touch

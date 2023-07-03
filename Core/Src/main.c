@@ -74,6 +74,8 @@ ETH_DMADescTypeDef DMATxDscrTab[ETH_TX_DESC_CNT] __attribute__((section(".TxDecr
 
 ETH_TxPacketConfig TxConfig;
 
+ADC_HandleTypeDef hadc3;
+
 DAC_HandleTypeDef hdac1;
 
 ETH_HandleTypeDef heth;
@@ -101,6 +103,9 @@ extern uint32_t _eitcm;
 static volatile bool pop_running = false;
 static volatile uint32_t pop_cycle_count = 0;
 
+uint32_t adc_val; //used to store adc3 readings
+uint32_t dac_val; //for dac1 output channel 1
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -113,6 +118,7 @@ static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_HRTIM_Init(void);
 static void MX_ETH_Init(void);
+static void MX_ADC3_Init(void);
 /* USER CODE BEGIN PFP */
 
 extern uint32_t init_synthesiser();
@@ -459,6 +465,7 @@ int main(void)
   MX_TIM1_Init();
   MX_HRTIM_Init();
   MX_ETH_Init();
+  MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
@@ -483,7 +490,7 @@ int main(void)
 	}
 	printf("Setting DAC output to 1.00V \r\n");
 	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1241) != HAL_OK){
-		printf("DAC setup failed!\r\n");
+			printf("DAC setup failed!\r\n");
 		Error_Handler();
 	}
 
@@ -502,20 +509,90 @@ int main(void)
 	printf("Setting spare SMA output high \r\n");
 //	HAL_GPIO_WritePin(SPARE_SMA_GPIO_Port, SPARE_SMA_Pin, GPIO_PIN_RESET); // Sets spare SMA output low
 
+
+	// adc_value variable store the adc value,
+	// temp variable store the temperature value
+	//uint16_t adc_value; //, temp;
+	// store the converted voltage value
+	// from analog value
+	//float voltage;
+	/* Fire up the ADC - continuous conversion */
+	// calibrate ADC for better accuracy and start it w/ interrupt
+	if(HAL_ADCEx_Calibration_Start(&hadc3, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK){
+		printf("ADC calibration failure \r\n");
+		Error_Handler();
+	}
+	printf("ADC calibrated successfully \r\n");
+	//Start the ADC with interrupts enabled
+	if(HAL_ADC_Start_IT(&hadc3) != HAL_OK){
+		printf("Failed to start ADC with interrupt capability \r\n");
+	                Error_Handler();
+	}
+
+//	HAL_ADC_Start(&hadc3); //start ADC conversion
+//	printf("Started conversion \r\n");
+//	HAL_ADC_PollForConversion(&hadc3, 100); //ADC poll for conversion
+//	printf("Polled conversion \r\n");
+//	adc_value = HAL_ADC_GetValue(&hadc3); // get the ADC conversion value
+//	HAL_ADC_Stop(&hadc3); // end ADC conversion
+//	//printf("Stopped ADC \r\n");
+//	printf("ADC value: %u \r\n", adc_value);
+
+	/* Zero the DAC output */
+	//double dac_val = 0;
+//	uint16_t dac_val = 0;
+//	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+//	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val) != HAL_OK){
+//		printf("DAC setup failed!\r\n");
+//		Error_Handler();
+//	}
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+//		/*Ramp up, with small roll-over, then down again*/
+//		for (uint32_t i = 0; i < 5000; i++) {
+//			printf("Setting DAC output to %lu \r\n", i);
+//			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, i); //increment output voltage
+//		}
+//
+//		for (uint32_t i = 5000; i > 0; i--) {
+//			printf("Setting DAC output to %lu \r\n", i);
+//			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, i); //decrement output voltage
+//		}
 
-		if (!pop_running) {
-			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of STOP mode.
-			HAL_PWREx_EnableFlashPowerDown();
-			HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs
-		} else {
-			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of SLEEP mode.
-			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs.
-		}
+//		HAL_ADC_Start(&hadc3); //start ADC conversion
+//		//printf("Started conversion \r\n");
+//		HAL_ADC_PollForConversion(&hadc3, 100); //ADC poll for conversion
+//		//printf("Polled conversion \r\n");
+//		adc_value = HAL_ADC_GetValue(&hadc3); // get the ADC conversion value
+//		//printf("ADC value: %u \r\n", adc_value);
+//		HAL_ADC_Stop(&hadc3); // end ADC conversion
+//		//printf("Stopped ADC \r\n");
+//		// convert ADC value into voltage
+//		//voltage = (adc_value*3.3)/4096;
+//		//printf("Voltage: %f \r\n", voltage);
+//
+//		dac_val = adc_value >> 4; //divide ADC output by 16 and program into dac_val
+//		printf("ADC value: %u, DAC value: %u \r\n", adc_value, dac_val);
+//		//Program DAC with 12-bit version of ADC contents
+//		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)(adc_value >> 4)) != HAL_OK){
+////		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
+//			printf("Failure to program value to DAC \r\n");
+//			Error_Handler();
+//		}
+
+
+//		if (!pop_running) {
+//			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of STOP mode.
+//			HAL_PWREx_EnableFlashPowerDown();
+//			HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs
+//		} else {
+//			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of SLEEP mode.
+//			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs.
+//		}
 
     /* USER CODE END WHILE */
 
@@ -611,6 +688,64 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief ADC3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC3_Init(void)
+{
+
+  /* USER CODE BEGIN ADC3_Init 0 */
+
+  /* USER CODE END ADC3_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC3_Init 1 */
+
+  /* USER CODE END ADC3_Init 1 */
+
+  /** Common config
+  */
+  hadc3.Instance = ADC3;
+  hadc3.Init.Resolution = ADC_RESOLUTION_16B;
+  hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc3.Init.LowPowerAutoWait = DISABLE;
+  hadc3.Init.ContinuousConvMode = DISABLE;
+  hadc3.Init.NbrOfConversion = 1;
+  hadc3.Init.DiscontinuousConvMode = DISABLE;
+  hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIG_EXT_IT11;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc3.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR;
+  hadc3.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc3.Init.LeftBitShift = ADC_LEFTBITSHIFT_NONE;
+  hadc3.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  sConfig.OffsetSignedSaturation = DISABLE;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC3_Init 2 */
+
+  /* USER CODE END ADC3_Init 2 */
+
+}
+
+/**
   * @brief DAC1 Initialization Function
   * @param None
   * @retval None
@@ -648,6 +783,13 @@ static void MX_DAC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN DAC1_Init 2 */
+  /** DAC auto-calibration
+  */
+//  if (HAL_DACEx_SelfCalibrate(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+//  {
+//    printf("Failed to auto-calibrate DAC \r\n");
+//    Error_Handler();
+//  }
 
   /* USER CODE END DAC1_Init 2 */
 
@@ -1037,6 +1179,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
@@ -1085,6 +1228,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PF11 */
+  GPIO_InitStruct.Pin = GPIO_PIN_11;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
   /*Configure GPIO pin : SCOPE_TRIG_OUT_Pin */
   GPIO_InitStruct.Pin = SCOPE_TRIG_OUT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -1128,15 +1277,23 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MISO_GPIO_Port, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 15, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  adc_val = HAL_ADC_GetValue(&hadc3);
+              // Toggle the Green LED
+  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+  //printf("ADC value: %lu \r\n", adc_val);
+  dac_val = adc_val >> 4;
+  printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
+  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+  //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2048);
+}
 
 /* USER CODE END 4 */
 

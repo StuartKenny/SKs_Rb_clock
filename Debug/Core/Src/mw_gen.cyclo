@@ -5,4 +5,4 @@ mw_gen.c:209:19:check_lock	3
 mw_gen.c:230:13:mute_mw_outputs	1
 mw_gen.c:239:13:set_frequency	10
 mw_gen.c:277:6:set_frequency_hz	4
-mw_gen.c:314:6:run_sweep	3
+mw_gen.c:314:6:run_sweep	2
