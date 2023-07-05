@@ -71,6 +71,9 @@ void Error_Handler(void);
 #define ATT_8_GPIO_Port GPIOE
 #define ATT_16_Pin GPIO_PIN_5
 #define ATT_16_GPIO_Port GPIOE
+#define BLUE_BUTTON_Pin GPIO_PIN_13
+#define BLUE_BUTTON_GPIO_Port GPIOC
+#define BLUE_BUTTON_EXTI_IRQn EXTI15_10_IRQn
 #define LD1_Pin GPIO_PIN_0
 #define LD1_GPIO_Port GPIOB
 #define SCOPE_TRIG_OUT_Pin GPIO_PIN_0

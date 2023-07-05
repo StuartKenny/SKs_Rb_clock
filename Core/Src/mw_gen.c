@@ -47,7 +47,7 @@ static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processi
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
-static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB between points
+//static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
 static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
@@ -69,7 +69,8 @@ extern DAC_HandleTypeDef hdac1; //declared in main.c
 /* Private function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify);
 __attribute__((section(".itcm"))) static uint32_t synth_readreg(const uint32_t reg_address);
-__attribute__((section(".itcm"))) uint32_t init_synthesiser();
+__attribute__((section(".itcm"))) uint32_t set_MW_power (const uint8_t mw_power);
+__attribute__((section(".itcm"))) uint32_t init_synthesiser(const uint8_t mw_power);
 __attribute__((section(".itcm"))) static const bool check_lock(uint32_t timeout);
 __attribute__((section(".itcm"))) static void mute_mw_outputs();
 __attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
@@ -127,9 +128,27 @@ static uint32_t synth_readreg(const uint32_t reg_address){
 
 }
 
-uint32_t init_synthesiser() {
+/* Program LO2 output gain */
+uint32_t set_MW_power (const uint8_t mw_power) {
+	if (mw_power > 3) {//check that LO2GAIN is an integer from 0 to 3 inclusive
+		printf("illegal mw_power - must be an integer from 0 to 3!\n");
+		Error_Handler(); // We enter an infinite loop here
+	}
+	uint32_t read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
+	read_data &= 0xFFFFFCFF; 		// Zero bits 8:9.
+	read_data |= (mw_power << 8);	// Set LO2GAIN value.
+	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
+	#ifdef MW_VERBOSE
+		printf("PROGRAMMED GAIN DIVIDER REGISTER: 0x%lX \r\n", read_data);
+	#endif
+	printf("LO2 gain setting: %u \r\n", mw_power);
+	return SUCCESS;
+}
+
+uint32_t init_synthesiser(const uint8_t mw_power) {
 
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off the amber lock LED
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 1);
@@ -191,13 +210,17 @@ uint32_t init_synthesiser() {
 	HAL_Delay(10); // Wait 10 ms for training to complete, not sure if we really need to do this.
 
 	/* Program LO2 output gain */
+	if (mw_power > 3) {//check that LO2GAIN is an integer from 0 to 3 inclusive
+		printf("illegal mw_power - must be an integer from 0 to 3!\n");
+		Error_Handler(); // We enter an infinite loop here
+	}
 	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
 	read_data &= 0xFFFFFCFF; 		// Zero bits 8:9.
-	read_data |= (LO2GAIN << 8);	// Set LO2GAIN value.
+	read_data |= (mw_power << 8);	// Set LO2GAIN value.
 	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 #ifdef MW_VERBOSE
 	printf("PROGRAMMED GAIN DIVIDER REGISTER: 0x%lX \r\n", read_data);
-	printf("LO2 gain setting: %u \r\n", LO2GAIN);
+	printf("LO2 gain setting: %u \r\n", mw_power);
 #endif
 
 	/* Sets output frequency to the hyperfine value */
@@ -313,6 +336,14 @@ void set_frequency_hz(const double fo) {
 
 void run_sweep() {
 
+	/* Output used for triggering external scope */
+//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
+//	printf("Setting trigger output high \r\n");
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
+#ifdef MW_VERBOSE
+	printf("Setting trigger output low \r\n");
+#endif
+
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
 
 #ifdef RAMP_DAC
@@ -328,7 +359,9 @@ void run_sweep() {
 	double dac_val = 0;
 #endif
 
-	__disable_irq();
+	//__disable_irq(); //Simon's code had IRQs disabled
+
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
 
 	for (uint32_t i = 0; i < num_points; i++) {
 
@@ -348,8 +381,9 @@ void run_sweep() {
 
 	}
 
-	__enable_irq();
+	//__enable_irq(); //Simon's code had IRQs disabled
 
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 	printf("Total Points: %lu\r\n", num_points);
 
 #ifdef RAMP_DAC
