@@ -1,6 +1,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "mw_gen.h"
-#include "main.h" //needed for port definitions
+#include "main.h" //needed for port and timer definitions
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -14,7 +14,7 @@
 #define SYNTH_ENABLE
 //#define SPI_DEBUG
 //#define MW_F_CHECK
-#define MW_VERBOSE
+//#define MW_VERBOSE
 //#define RAMP_DAC // Use a DAC output to represent increasing MW frequency
 #define HALT_ON_LOSS_OF_LOCK
 #define VERIFY 1 //constant, don't touch
@@ -28,19 +28,31 @@
 #define FRACTIONAL_FREQUENCY_REGISTER 0x04
 #define LOCK_DETECT_REGISTER 0x07
 #define ANALOG_EN_REGISTER 0x08
+#define GPO_REGISTER 0x0F
 #define GPOLD_REGISTER 0x12
 #define GAIN_DIVIDER_REGISTER 0x16
 #define MODES_REGISTER 0x17
 
 /* Private variables ---------------------------------------------------------*/
-static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
+//static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
+//static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
+//static TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
+//Timers are declared in main.h and defined in main.c
+//TIM_TypeDef * FAST_TIMER; // Clocked at 100 kHz.
+//TIM_TypeDef * SLOW_TIMER; // Clocked at 10 kHz.
 static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
 //static const uint32_t LOCK_WAIT_US = 10; // 10 us SB original definition
-static const uint32_t LOCK_WAIT_US = 1000; // 1ms (10us was regularly timing out)
+//static const uint32_t LOCK_WAIT_US = 1000; // 1ms (10us was regularly timing out)
+static const uint32_t MW_STABILISE_TIME_US = 2000; // 2ms for MW output to stabilise before signalling FPGA
 //static const uint32_t DWELL_TIME_US = 100; // 100us
 //static const uint32_t DWELL_TIME_US = 5960; // 5.96ms x 1679 steps for 10s ramp (12.7s in practice)
-static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
+//static const uint32_t DWELL_TIME_US = 400; // (0.4ms + measured 1.6ms processing) x 1679 steps for 3.3s ramp
+//static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
+//static const uint32_t DWELL_TIME_US = 114200; // (114.2ms + 2ms MW_stabilise + measured 2.9ms processing) x 1679 steps for 200s ramp
+//static const uint32_t DWELL_TIME_US = 10000; // (10ms + 2ms MW_stabilise + measured 2.9ms processing) x 1679 steps for 25s ramp
+static const uint32_t DWELL_TIME_US = 7000; // (7.0ms + 2ms MW_stabilise + measured 2.9ms processing) x 1679 steps for 19.5s ramp
+//static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
 //static const uint32_t DWELL_TIME_US = 59600; // 59.6ms x 1679 steps for 100s ramp (102s in practice)
 //static const uint32_t DWELL_TIME_US = 1000000; // 1s for accurate spectrum analyser readings
 //static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
@@ -59,23 +71,29 @@ static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
 //SweepSettings const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) }; //SB original settings
+//For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035735189GHz
+SweepSettings const sweep_settings = {3.035732689E9, 3.035737689E9, (50e6 / (1 << 24)) }; //SK settings based on measured centre of DR
 //For 10kHz sweep, 5.96Hz x 1679 steps, centred around 3.035736939GHz
-SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 23)) };
+//SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 23)) };
 //For 10kHz sweep, 190.7Hz step, centred around 3.035736939GHz
 //SweepSettings const sweep_settings = {3.0357319390E9, 3.0357419390e9, (50e6 / (1 << 18)) };
 
 extern DAC_HandleTypeDef hdac1; //declared in main.c
+extern volatile bool blue_button_status; //declared in main.c
 
 /* Private function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify);
 __attribute__((section(".itcm"))) static uint32_t synth_readreg(const uint32_t reg_address);
 __attribute__((section(".itcm"))) uint32_t set_MW_power (const uint8_t mw_power);
 __attribute__((section(".itcm"))) uint32_t init_synthesiser(const uint8_t mw_power);
-__attribute__((section(".itcm"))) static const bool check_lock(uint32_t timeout);
+__attribute__((section(".itcm"))) static const bool poll_until_locked(uint32_t timeout);
+__attribute__((section(".itcm"))) static const bool lock_status(void);
 __attribute__((section(".itcm"))) static void mute_mw_outputs();
 __attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
 __attribute__((section(".itcm"))) void set_frequency_hz(const double fo);
 __attribute__((section(".itcm"))) void run_sweep();
+__attribute__((section(".itcm"))) void MW_frequency_toggle (const double f_one, const double f_two);
+__attribute__((section(".itcm"))) void set_SDO_output(const uint32_t GPO_setting);
 extern uint32_t start_timer(TIM_TypeDef * timer);
 extern uint32_t stop_timer(TIM_TypeDef * timer);
 extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
@@ -177,7 +195,7 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
 	printf("READ MODES REGISTER: 0x%lX \r\n", read_data);
 #endif
 	read_data |= (0x1UL << 9);     // Enable single ended output for LO2 (LO2_P)
-	read_data  &= ~(AUTO_MUTE << 7); //can disable auto_mute - see variable declarations
+	read_data  &= ~(!AUTO_MUTE << 7); //can disable auto_mute - see variable declarations
 	synth_writereg(read_data, MODES_REGISTER, 0x0, VERIFY); // Send
 #ifdef MW_VERBOSE
 	printf("PROGRAMMED MODES REGISTER: 0x%lX \r\n", read_data);
@@ -229,7 +247,7 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
 	return SUCCESS;
 }
 
-static const bool check_lock(uint32_t timeout) {
+static const bool poll_until_locked(uint32_t timeout) {
 
 	bool locked = false;
 
@@ -238,7 +256,6 @@ static const bool check_lock(uint32_t timeout) {
 
 	while ((FAST_TIMER->CNT - start) < timeout) {
 		//printf("Debug lock while condition\r\n");
-		//locked = synth_readreg(0x12) & (1UL << 1);
 		locked = synth_readreg(GPOLD_REGISTER) & (1UL << 1);
 		if (locked) {
 			stop_timer(FAST_TIMER);
@@ -248,6 +265,13 @@ static const bool check_lock(uint32_t timeout) {
 
 	stop_timer(FAST_TIMER);
 	return false;
+}
+
+static const bool lock_status(void) {
+
+	bool locked = synth_readreg(GPOLD_REGISTER) & (1UL << 1);
+	return locked;
+
 }
 
 static void mute_mw_outputs() {
@@ -287,14 +311,6 @@ static void set_frequency(const uint32_t integer, const uint32_t fraction, const
 		last_vcodiv = vco_divider;
 	}
 
-	if (!check_lock(LOCK_WAIT_US)) {
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); //turn off amber LED
-		printf("Lock failed within set_frequency!\r\n");
-#ifdef HALT_ON_LOSS_OF_LOCK
-		Error_Handler();
-#endif //HALT_ON_LOSS_OF_LOCK
-	}
-
 }
 
 void set_frequency_hz(const double fo) {
@@ -330,15 +346,26 @@ void set_frequency_hz(const double fo) {
 	}
 #endif
 
-	set_frequency(NINT, NFRAC, k, MANUAL_MUTE);
+	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
+	set_frequency(NINT, NFRAC, k, MANUAL_MUTE); //Sets only the necessary Hittite registers
+
+	//MW stabilisation delay and check for lock
+	timer_delay(FAST_TIMER, MW_STABILISE_TIME_US);
+	//if (!poll_until_locked(LOCK_WAIT_US)) {
+	if (!lock_status()) {
+		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); //turn off amber LED
+		printf("Failed to establish MW Lock within %ld us of setting frequency!\r\n", MW_STABILISE_TIME_US);
+#ifdef HALT_ON_LOSS_OF_LOCK
+		Error_Handler();
+#endif //HALT_ON_LOSS_OF_LOCK
+		HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
+	}
 
 }
 
 void run_sweep() {
 
 	/* Output used for triggering external scope */
-//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
-//	printf("Setting trigger output high \r\n");
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
 #ifdef MW_VERBOSE
 	printf("Setting trigger output low \r\n");
@@ -378,13 +405,18 @@ void run_sweep() {
 #endif
 
 		timer_delay(FAST_TIMER, DWELL_TIME_US);
-
+		////////
+		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+		if (blue_button_status) {// If blue button is pressed
+			printf("Terminating sweep early as blue button pressed \r\n");
+			break;
+		}
 	}
 
 	//__enable_irq(); //Simon's code had IRQs disabled
 
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
-	printf("Total Points: %lu\r\n", num_points);
+	printf("Sweep complete: %lu points\r\n", num_points);
 
 #ifdef RAMP_DAC
 	/* Zero and stop the DAC */
@@ -392,4 +424,66 @@ void run_sweep() {
 	//HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);
 #endif
 
+}
+
+/* Function to check MW settling time
+ * Toggles between two MW frequencies
+ */
+void MW_frequency_toggle (const double f_one, const double f_two) {
+	printf("MW frequency toggling experiment\r\n");
+	printf("Toggling between %f and %f Hz\r\n", f_one, f_two);
+
+	/* For the k divider we need to find the smallest even integer or use a max of 62*/
+	uint32_t k_one = VCO_MAX_FREQ / f_one;
+	if (k_one != 1) {
+		while (k_one > 62 || k_one % 2) {
+			k_one--;
+		}
+	}
+	uint32_t k_two = VCO_MAX_FREQ / f_two;
+	if (k_two != 1) {
+		while (k_two > 62 || k_two % 2) {
+			k_two--;
+		}
+	}
+
+	const double N_one = ((f_one * k_one) / REF_FREQ);
+	const double N_two = ((f_two * k_two) / REF_FREQ);
+
+	/* Extract the fractional and integer parts */
+	const uint32_t N_one_INT = N_one;
+	const uint32_t N_one_FRAC = ((N_one - N_one_INT) * (1 << 24)) + 0.5;
+	const uint32_t N_two_INT = N_two;
+	const uint32_t N_two_FRAC = ((N_two - N_two_INT) * (1 << 24)) + 0.5;
+
+	while (1) {
+	set_frequency(N_one_INT, N_one_FRAC, k_one, MANUAL_MUTE); //Program necessary values for f_one
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
+	timer_delay(SLOW_TIMER, 1000); //100ms delay
+	set_frequency(N_two_INT, N_two_FRAC, k_two, MANUAL_MUTE); //Program necessary values for f_two
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
+	timer_delay(SLOW_TIMER, 1000); //100ms delay
+	}
+}
+
+/* Selects SDO pin connectivity/functionality
+ * By default, the SDO pin will output 'Lock detect' but can be connected
+ * to other internal signals. See table 2.15 of HMC835 datasheet (v04.1113)
+ * for more details all options
+ */
+ void set_SDO_output(const uint32_t GPO_setting) {
+	//Default output on SDO pin is 'Lock detect output', value 0x01
+	//VCO divider is 0x0A
+	//See table 2.15 of HMC835 datasheet for more details (v04.1113)
+	uint32_t read_data = 0x0;
+
+	if (GPO_setting > 31) {
+		printf("SDO pin value must be less that 32\r\n");
+		Error_Handler();
+	}
+	read_data = synth_readreg(GPO_REGISTER); // Get the current value.
+	read_data &= 0xFFFFFFE0; // Zero the first 5 LSBs.
+	//read_data |= 0x0A; //Select VCO divider output
+	read_data |= GPO_setting; //Select GPO output dependent on function input value
+	synth_writereg(read_data, GPO_REGISTER, 0x0, VERIFY); // Update the GPO register.
 }

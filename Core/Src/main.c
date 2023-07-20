@@ -9,6 +9,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "string.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,6 +47,7 @@ struct AttenuatorSettings
 #define SYNTH_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
+#define MW_VERBOSE
 
 /* USER CODE END PD */
 
@@ -55,9 +57,30 @@ struct AttenuatorSettings
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+#if defined ( __ICCARM__ ) /*!< IAR Compiler */
+#pragma location=0x30000000
+ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
+#pragma location=0x30000200
+ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
+
+#elif defined ( __CC_ARM )  /* MDK ARM Compiler */
+
+__attribute__((at(0x30000000))) ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
+__attribute__((at(0x30000200))) ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
+
+#elif defined ( __GNUC__ ) /* GNU Compiler */
+ETH_DMADescTypeDef DMARxDscrTab[ETH_RX_DESC_CNT] __attribute__((section(".RxDecripSection"))); /* Ethernet Rx DMA Descriptors */
+ETH_DMADescTypeDef DMATxDscrTab[ETH_TX_DESC_CNT] __attribute__((section(".TxDecripSection")));   /* Ethernet Tx DMA Descriptors */
+
+#endif
+
+ETH_TxPacketConfig TxConfig;
+
 ADC_HandleTypeDef hadc3;
 
 DAC_HandleTypeDef hdac1;
+
+ETH_HandleTypeDef heth;
 
 HRTIM_HandleTypeDef hhrtim;
 
@@ -69,8 +92,11 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
-static TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
+//Timers defined here but declared in main.h
+//TIM_TypeDef * FAST_TIMER; // Clocked at 100 kHz.
+//TIM_TypeDef * SLOW_TIMER; // Clocked at 10 kHz.
+TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
+TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 
 extern SweepSettings const sweep_settings;
@@ -82,10 +108,10 @@ extern uint32_t _eitcm;
 static volatile bool pop_running = false;
 static volatile bool mw_sweep_started = false;
 static volatile uint32_t pop_cycle_count = 0;
-static volatile bool blue_button_status; //blue button state. 1 when pressed
+volatile bool blue_button_status; //blue button state. 1 when pressed
 //static volatile bool pin_status; //blue button state. 1 when pressed
 //static bool last_pin_status; //previous blue button state
-static uint8_t MW_power = 0x3; // Initial MW power i.e. LO2GAIN
+static uint8_t MW_power = 0x1; // Initial MW power i.e. LO2GAIN
 //3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
@@ -108,12 +134,14 @@ static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_HRTIM_Init(void);
 static void MX_ADC3_Init(void);
+static void MX_ETH_Init(void);
 /* USER CODE BEGIN PFP */
 
 extern uint32_t set_MW_power (const uint8_t mw_power);
 extern uint32_t init_synthesiser(const uint8_t mw_power);
 extern void set_frequency_hz(const double fo);
 extern void run_sweep();
+extern void MW_frequency_toggle (const double f_one, const double f_two);
 __attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
@@ -217,7 +245,7 @@ static void start_pop() {
 		Error_Handler();
 	}
 
-	timer_delay(SLOW_TIMER, 1000);
+	timer_delay(SLOW_TIMER, 1000); //100ms delay
 
 	if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
 	HRTIM_TIMERINDEX_TIMER_A,
@@ -455,6 +483,7 @@ int main(void)
   MX_TIM1_Init();
   MX_HRTIM_Init();
   MX_ADC3_Init();
+  MX_ETH_Init();
   /* USER CODE BEGIN 2 */
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
@@ -464,7 +493,10 @@ int main(void)
 		printf("Synthesiser initialisation failed!\r\n");
 		Error_Handler();
 	}
-#endif
+#ifdef MW_VERBOSE
+	printf("LO2GAIN set at: 0x%x \r\n", MW_power);
+#endif	//MW_VERBOSE
+#endif //SYNTH_ENABLE
 
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
@@ -490,10 +522,22 @@ int main(void)
 //	printf("Setting trigger output low \r\n");
 
 	/* Spare SMA pin */
-//	SPARE_SMA_GPIO_Port, SPARE_SMA_Pin
-	HAL_GPIO_WritePin(SPARE_SMA_GPIO_Port, SPARE_SMA_Pin, GPIO_PIN_SET); // Sets spare SMA output high
-	printf("Setting spare SMA output high \r\n");
-//	HAL_GPIO_WritePin(SPARE_SMA_GPIO_Port, SPARE_SMA_Pin, GPIO_PIN_RESET); // Sets spare SMA output low
+//	SPARE_OUT_GPIO_Port, SPARE_OUT_Pin
+//	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_SET); // Sets spare SMA output high
+//	printf("Setting spare SMA output high \r\n");
+//	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_RESET); // Sets spare SMA output low
+
+	/* Laser tuning pin */
+//	LASER_TUNING_GPIO_Port, LASER_TUNING_Pin
+	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
+	printf("Requesting FPGA CW absorption \r\n");
+//	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
+
+	/* MW invalid */
+//	MW_INVALID_GPIO_Port, MW_INVALID_Pin
+//	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); // MW_invalid output high
+	printf("Setting MW invalid output low \r\n");
+	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); // MW_invalid output low
 
 	/* Fire up the ADC */
 	// external trigger, single conversion selected in ioc file
@@ -542,17 +586,34 @@ int main(void)
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
+			printf("Requesting FPGA POP \r\n");
+			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
+
+			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
+			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
+			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
+			set_MW_power(0x03); //set maximum MW power to improve contrast
+			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
+			MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
+
 			//change the MW power each time the button is pressed, unless it's the first time round this loop
 			if (mw_sweep_started) {
 				++MW_power; //increase MW_power value by 1
 				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
 					MW_power = 0;
 				}
+				set_MW_power(MW_power);
+#ifdef MW_VERBOSE
+				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
+#endif //MW_VERBOSE
 			} else {
 					printf("Initiating sweep.\r\n");
 					mw_sweep_started = true;
 			}
-			set_MW_power(MW_power);
+			while(blue_button_status) {//remain here polling button until it is released
+				timer_delay(SLOW_TIMER, 100); //10ms delay
+				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+			}
 		}
 
 		if (mw_sweep_started) {//won't execute until the first time the blue button is pressed
@@ -560,7 +621,8 @@ int main(void)
 			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
 			run_sweep();
 			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
-			printf("Sweep complete.\r\n");
+			//printf("Sweep complete.\r\n");
+			printf("LO2GAIN: 0x%x \r\n", MW_power);
 		}
     /* USER CODE END WHILE */
 
@@ -760,6 +822,55 @@ static void MX_DAC1_Init(void)
 //  }
 
   /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief ETH Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ETH_Init(void)
+{
+
+  /* USER CODE BEGIN ETH_Init 0 */
+
+  /* USER CODE END ETH_Init 0 */
+
+   static uint8_t MACAddr[6];
+
+  /* USER CODE BEGIN ETH_Init 1 */
+
+  /* USER CODE END ETH_Init 1 */
+  heth.Instance = ETH;
+  MACAddr[0] = 0x00;
+  MACAddr[1] = 0x80;
+  MACAddr[2] = 0xE1;
+  MACAddr[3] = 0x00;
+  MACAddr[4] = 0x00;
+  MACAddr[5] = 0x00;
+  heth.Init.MACAddr = &MACAddr[0];
+  heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
+  heth.Init.TxDesc = DMATxDscrTab;
+  heth.Init.RxDesc = DMARxDscrTab;
+  heth.Init.RxBuffLen = 1524;
+
+  /* USER CODE BEGIN MACADDRESS */
+
+  /* USER CODE END MACADDRESS */
+
+  if (HAL_ETH_Init(&heth) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  memset(&TxConfig, 0 , sizeof(ETH_TxPacketConfig));
+  TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
+  TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
+  TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
+  /* USER CODE BEGIN ETH_Init 2 */
+
+  /* USER CODE END ETH_Init 2 */
 
 }
 
@@ -1106,7 +1217,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOE, ATT_4_Pin|ATT_8_Pin|ATT_16_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LD1_Pin|SPARE_SMA_Pin|LD3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LD1_Pin|MW_INVALID_Pin|LASER_TUNING_Pin|LD3_Pin
+                          |SPARE_OUT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET);
@@ -1140,24 +1252,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BLUE_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC1 PC4 PC5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PA1 PA2 PA7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : LD1_Pin SPARE_SMA_Pin LD3_Pin */
-  GPIO_InitStruct.Pin = LD1_Pin|SPARE_SMA_Pin|LD3_Pin;
+  /*Configure GPIO pins : LD1_Pin MW_INVALID_Pin LASER_TUNING_Pin LD3_Pin
+                           SPARE_OUT_Pin */
+  GPIO_InitStruct.Pin = LD1_Pin|MW_INVALID_Pin|LASER_TUNING_Pin|LD3_Pin
+                          |SPARE_OUT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -1175,14 +1273,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SCOPE_TRIG_OUT_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PB13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : USB_OTG_FS_PWR_EN_Pin ATT_2_Pin ATT_1_Pin ATT_05_Pin
                            ATT_025_Pin ATT_LE_Pin */
@@ -1220,14 +1310,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MISO_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PG11 PG13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
@@ -1252,9 +1334,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	  adc_max = adc_val;
 	  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
   }
+  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
 #endif //QUANTIFY_ADC_NOISE
   //printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
-  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
   HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
   //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2048);
 }
