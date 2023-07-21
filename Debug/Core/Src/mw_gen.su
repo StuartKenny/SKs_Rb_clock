@@ -1,0 +1,12 @@
+../Core/Src/mw_gen.c:102:17:synth_writereg	48	static
+../Core/Src/mw_gen.c:140:17:synth_readreg	24	static
+../Core/Src/mw_gen.c:150:10:set_MW_power	24	static
+../Core/Src/mw_gen.c:166:10:init_synthesiser	24	static
+../Core/Src/mw_gen.c:250:19:poll_until_locked	24	static
+../Core/Src/mw_gen.c:270:19:lock_status	16	static
+../Core/Src/mw_gen.c:277:13:mute_mw_outputs	16	static
+../Core/Src/mw_gen.c:286:13:set_frequency	32	static
+../Core/Src/mw_gen.c:316:6:set_frequency_hz	40	static
+../Core/Src/mw_gen.c:366:6:run_sweep	24	static
+../Core/Src/mw_gen.c:432:6:MW_frequency_toggle	72	static
+../Core/Src/mw_gen.c:474:7:set_SDO_output	24	static

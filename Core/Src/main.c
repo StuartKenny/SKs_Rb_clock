@@ -9,9 +9,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "string.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "mw_gen.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -22,13 +24,8 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
-struct SweepSettings {
-	const double req_start_freq;
-	const double req_stop_freq;
-	const double step_size;
-} static const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) };
-
+#define ATTENUATOR_CODE //include code related to AOM attenuator (SBJK clock)
+#ifdef ATTENUATOR_CODE
 struct AttenuatorSettings
 {
     const GPIO_PinState ATT_0DB25 : 1;  // 1-bit unsigned field: 0.25 dB
@@ -38,8 +35,8 @@ struct AttenuatorSettings
     const GPIO_PinState ATT_4DB : 1;  // 1-bit unsigned field: 4 dB
     const GPIO_PinState ATT_8DB : 1;  // 1-bit unsigned field: 8 dB
     const GPIO_PinState ATT_16DB : 1;  // 1-bit unsigned field: 16 dB
-
 };
+#endif //ATTENUATOR_CODE
 
 /* USER CODE END PTD */
 
@@ -49,7 +46,8 @@ struct AttenuatorSettings
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define SYNTH_ENABLE
 #define POP_START_PULSE
-//#define RAMP_DAC // Use a DAC output to indiciate the MW frequecny
+//#define QUANTIFY_ADC_NOISE
+#define MW_VERBOSE
 
 /* USER CODE END PD */
 
@@ -59,8 +57,30 @@ struct AttenuatorSettings
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+#if defined ( __ICCARM__ ) /*!< IAR Compiler */
+#pragma location=0x30000000
+ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
+#pragma location=0x30000200
+ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
+
+#elif defined ( __CC_ARM )  /* MDK ARM Compiler */
+
+__attribute__((at(0x30000000))) ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
+__attribute__((at(0x30000200))) ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
+
+#elif defined ( __GNUC__ ) /* GNU Compiler */
+ETH_DMADescTypeDef DMARxDscrTab[ETH_RX_DESC_CNT] __attribute__((section(".RxDecripSection"))); /* Ethernet Rx DMA Descriptors */
+ETH_DMADescTypeDef DMATxDscrTab[ETH_TX_DESC_CNT] __attribute__((section(".TxDecripSection")));   /* Ethernet Tx DMA Descriptors */
+
+#endif
+
+ETH_TxPacketConfig TxConfig;
+
+ADC_HandleTypeDef hadc3;
 
 DAC_HandleTypeDef hdac1;
+
+ETH_HandleTypeDef heth;
 
 HRTIM_HandleTypeDef hhrtim;
 
@@ -72,24 +92,33 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
-static TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
-static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
-static const uint32_t SYNTH_SPI_BITS = 32;
-static const uint32_t SYNTH_ID = 0xC7701A;
-static const uint32_t LOCK_WAIT_US = 10; // 100 us
-static const uint32_t DWELL_TIME_US = 100; // 1 ms
+//Timers defined here but declared in main.h
+TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
+TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
-static const double VCO_MAX_FREQ = 4100E6;
-//static const double VCO_MIN_FREQ = 2050E6;
-static const double REF_FREQ = 50E6;
+
+extern SweepSettings const sweep_settings;
 
 extern uint32_t _siitcm;
 extern uint32_t _sitcm;
 extern uint32_t _eitcm;
 
 static volatile bool pop_running = false;
+static volatile bool mw_sweep_started = false;
 static volatile uint32_t pop_cycle_count = 0;
+volatile bool blue_button_status; //blue button state. 1 when pressed
+//static volatile bool pin_status; //blue button state. 1 when pressed
+//static bool last_pin_status; //previous blue button state
+static uint8_t MW_power = 0x1; // Initial MW power i.e. LO2GAIN
+//3 is max, 0 is min, log scale with 2dB between points
+//max is +5dBm output, min is -1dBm out.
+//NOTE - these values are measured and not consistent with datasheet
+uint32_t adc_val; //used to store adc3 readings
+#ifdef QUANTIFY_ADC_NOISE
+uint32_t adc_max, adc_min; //used to store adc3 readings
+#endif //QUANTIFY_ADC_NOISE
+uint32_t dac_val; //for dac1 output channel 1
+
 
 /* USER CODE END PV */
 
@@ -102,21 +131,23 @@ static void MX_USART3_UART_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_HRTIM_Init(void);
+static void MX_ADC3_Init(void);
+static void MX_ETH_Init(void);
 /* USER CODE BEGIN PFP */
 
-__attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify);
-__attribute__((section(".itcm"))) static uint32_t synth_readreg(const uint32_t reg_address);
-__attribute__((section(".itcm"))) static uint32_t init_synthesiser();
-__attribute__((section(".itcm"))) static const bool check_lock(uint32_t timeout);
-__attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
-__attribute__((section(".itcm"))) static void set_frequency_hz(const double fo);
-__attribute__((section(".itcm"))) static void run_sweep();
-__attribute__((section(".itcm"))) static uint32_t start_timer(TIM_TypeDef * timer);
-__attribute__((section(".itcm"))) static uint32_t stop_timer(TIM_TypeDef * timer);
-__attribute__((section(".itcm"))) static void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
-__attribute__((section(".itcm"))) static void set_aom_atten(const struct AttenuatorSettings a);
+extern uint32_t set_MW_power (const uint8_t mw_power);
+extern uint32_t init_synthesiser(const uint8_t mw_power);
+extern void set_frequency_hz(const double fo);
+extern void run_sweep();
+extern void MW_frequency_toggle (const double f_one, const double f_two);
+__attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 __attribute__((section(".itcm"))) static void start_pop();
 __attribute__((section(".itcm"))) static void stop_pop();
+#ifdef ATTENUATOR_CODE
+__attribute__((section(".itcm"))) static void set_aom_atten(const struct AttenuatorSettings a);
+#endif //ATTENUATOR_CODE
 
 /* USER CODE END PFP */
 
@@ -128,273 +159,8 @@ PUTCHAR_PROTOTYPE {
 	return ch;
 }
 
-static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify) {
-
-	uint32_t read_data = 0;
-	const uint32_t write_data = (data << 8) | (reg_address << 3) | chip_address; // This is what we will write, 32 bits in total.
-
-	//printf("SPI BYTES WRITTEN: 0x%08x \r\n", write_data);
-
-	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
-	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 0); // Take SEN low to indicate we are sending data
-
-	/* Clock in the data */
-	for (uint32_t i = 0; i < SYNTH_SPI_BITS; i++) {
-
-		/* Data written on the rising edge */
-		uint32_t bit = (SYNTH_SPI_BITS - 1 - i);
-		HAL_GPIO_WritePin(MOSI_GPIO_Port, MOSI_Pin, !!(write_data & (1 << bit)));
-		HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 1);
-		HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
-
-		/* Data read on the falling edge */
-		read_data = read_data
-				| (HAL_GPIO_ReadPin(MISO_GPIO_Port, MISO_Pin)
-						<< (SYNTH_SPI_BITS - 1 - i));
-	}
-
-	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 1); // Assert the SEN line to register the transmitted data
-
-	if (verify) {
-		const uint32_t verify_data = synth_readreg(reg_address); // Data returned on the second cycle
-		if (verify_data != data) {
-			printf("SPI transmission error!\n");
-			Error_Handler(); // We enter an infinite loop here
-		}
-	}
-
-	return read_data;
-}
-
-static uint32_t synth_readreg(const uint32_t reg_address){
-
-    synth_writereg(reg_address, 0x0, 0x0, false); // First cycle to send the read address
-    const uint32_t read_data = synth_writereg(reg_address, 0x0, 0x0, false);  // Data returned on the second cycle
-
-    return (read_data >> 8); // We only care about the first 24 bits returned.
-
-}
-
-static uint32_t init_synthesiser() {
-
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off the lock LED
-
-	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
-	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 1);
-
-	HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 1); // Enable the main regulator.
-
-	HAL_Delay(100); // Wait 100 ms for the supply to stabilise.
-
-	synth_writereg(0x1UL << 5, 0x0, 0x0, false); // Soft reset.
-	synth_writereg(0x41BFFF, 0x08, 0x0, true); // Set the SDO output level to 3.3 Volts
-
-	uint32_t read_data = synth_readreg(0x00); // Read the ID register to check the chip is communicating
-	/* Check we have the correct ID */
-	if (read_data != SYNTH_ID) {
-		HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0); // Disable the main regulator.
-		printf("Incorrect synthesiser ID!\r\n");
-		return ERROR;
-	}
-
-	/* Everything looks good, we can communicate with the chip :-) */
-	printf("HMC835 Detected.\r\n");
-
-	/* Enables Single-Ended output mode for LO2 output */
-	read_data = synth_readreg(0x17); // Get the current value of the modes register
-	read_data |= (0x1UL << 9);     // Enable single ended output for LO2 (LO2_P)
-	synth_writereg(read_data, 0x17, 0x0, true); // Send
-
-	/* Disable auto mute */
-	//read_data = synth_readreg(0x17);
-	//read_data  &= ~(0x1UL << 7);
-	//synth_writereg(read_data, 0x17, 0x0, true); // Send
-
-	/* Update lock detect window */
-	//read_data = synth_readreg(0x7); // Get the current value.
-	//read_data &= 0xFFFFFFF8; // Zero the first 3 LSBs.
-	//read_data |= 0x07;
-	//synth_writereg(read_data, 0x07, 0x0, true); // Update the VCO divide register.
-
-	synth_writereg(1, 0x02, 0x0, true); // Reference divider setting.
-
-	/* Lock detect training: This must be done after any change to the PD
-	 * reference frequency or after power cycle. */
-	read_data = synth_readreg(0x16); // Get the current value
-	read_data |= (0x1UL << 11);      // Enable lock-detect counters.
-	read_data |= (0x1UL << 14);      // Enable the lock-detect timer.
-	read_data |= (0x1UL << 20);      // Train the lock-detect timer.
-	synth_writereg(read_data, 0x07, 0x0, true); // Send
-	HAL_Delay(10); // Wait 10 ms for training to complete, not sure if we really need to do this.
-
-	return SUCCESS;
-
-}
-
-static const bool check_lock(uint32_t timeout) {
-
-	bool locked = false;
-
-	/* Check for lock */
-	uint32_t start = start_timer(FAST_TIMER);
-
-	while ((FAST_TIMER->CNT - start) < timeout) {
-		locked = synth_readreg(0x12) & (1UL << 1);
-		if (locked) {
-			stop_timer(FAST_TIMER);
-			return true;
-		}
-	}
-
-	stop_timer(FAST_TIMER);
-	return false;
-}
-
-static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute) {
-
-	static uint32_t last_integer = -1, last_fraction = -1, last_vcodiv = -1;
-
-	uint32_t read_data = 0x0;
-
-	if (mute) {
-		/* Mute the outputs */
-		read_data = synth_readreg(0x16); // Get the current value.
-		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
-		synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
-	}
-
-	if (last_integer == -1 || (last_integer != integer)) {
-		synth_writereg(integer, 0x03, 0x0, true);   // Integer register.
-		last_integer = integer;
-	}
-
-	if (last_fraction == -1 || (last_fraction != fraction)) {
-		synth_writereg(fraction, 0x04, 0x0, true);  // Fractional register.
-		last_fraction = fraction;
-	}
-
-	if (last_vcodiv == -1 || (last_vcodiv != vco_divider)) {
-		read_data = synth_readreg(0x16); // Get the current value.
-		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
-		read_data |= vco_divider; // This will un-mute the outputs */
-		synth_writereg(read_data, 0x16, 0x0, true); // Update the VCO divide register.
-		last_vcodiv = vco_divider;
-	}
-
-	if (!check_lock(LOCK_WAIT_US)) {
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-		printf("Lock failed!\r\n");
-		Error_Handler();
-	}
-
-}
-
-static void run_sweep() {
-
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
-
-#ifdef RAMP_DAC
-	/* Zero the DAC output */
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
-#endif
-
-	static const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
-	static const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
-	static const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
-
-#ifdef RAMP_DAC
-	double dac_val = 0;
-#endif
-
-	__disable_irq();
-
-	for (uint32_t i = 0; i < num_points; i++) {
-
-		double fo = start_freq + (i * sweep_settings.step_size);
-
-		/* For the k divider we need to find the smallest even integer or use a max of 62*/
-		uint32_t k = VCO_MAX_FREQ / fo;
-
-		if (k != 1) {
-			while (k > 62 || k % 2) {
-				k = k - 1;
-			}
-		}
-
-		/* Calculate the N division ratio */
-		const double N = ((fo * k) / REF_FREQ);
-
-		/* Extract the fractional and integer parts */
-		const uint32_t NINT = N;
-		const uint32_t NFRAC = ((N - NINT) * (1 << 24)) + 0.5;
-
-		const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
-		if (fo != fo_check) {
-			printf("f0 check failed - point 1!\r\n");
-			Error_Handler();
-		}
-
-		//printf("Setting frequency: k=%ld; N=%.17g; NINT=%ld; NFRAC=%ld; f=%.17g Hz\r\n", k,N, NINT, NFRAC, fo);
-		//set_frequency(NINT, NFRAC, k, false);
-		set_frequency(60, 11992019, 1, false); //3.03574GHz measured
-		//set_frequency_hz(3.035732439E9); //temporarily use a fixed frequency
-		//set_frequency_hz(3.0357344390E9); //temporarily use a fixed frequency
-
-
-#ifdef RAMP_DAC
-		dac_val = dac_val + (4096.0/num_points);
-		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
-			printf("DAC setup failed!\r\n");
-			Error_Handler();
-		}
-#endif
-
-		timer_delay(FAST_TIMER, DWELL_TIME_US);
-
-	}
-
-	__enable_irq();
-
-	printf("Total Points: %lu; s\r\n", num_points);
-
-#ifdef RAMP_DAC
-	/* Zero and stop the DAC */
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
-	HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);
-#endif
-
-}
-
-static void set_frequency_hz(const double fo) {
-
-	/* For the k divider we need to find the smallest even integer or use a max of 62*/
-	uint32_t k = VCO_MAX_FREQ / fo;
-
-	if (k != 1) {
-		while (k > 62 || k % 2) {
-			k = k - 1;
-		}
-	}
-
-	/* Calculate the N division ratio */
-	const double N = ((fo * k) / REF_FREQ);
-
-	/* Extract the fractional and integer parts */
-	const uint32_t NINT = N;
-	const uint32_t NFRAC = ((N - NINT) * (1 << 24)) + 0.5;
-
-	const double fo_check = (REF_FREQ * (NINT + (NFRAC / (double) (1 << 24)))) / k;
-	if (fo != fo_check) {
-		printf("f0 check failed! - point2\r\n");
-		Error_Handler();
-	}
-
-	set_frequency(NINT, NFRAC, k, false);
-
-}
-
+#ifdef ATTENUATOR_CODE
 static void set_aom_atten(const struct AttenuatorSettings a) {
-
 	HAL_GPIO_WritePin(ATT_LE_GPIO_Port, ATT_LE_Pin, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(ATT_025_GPIO_Port, ATT_025_Pin, a.ATT_0DB25);
 	HAL_GPIO_WritePin(ATT_05_GPIO_Port, ATT_05_Pin, a.ATT_0DB5);
@@ -403,10 +169,10 @@ static void set_aom_atten(const struct AttenuatorSettings a) {
 	HAL_GPIO_WritePin(ATT_4_GPIO_Port, ATT_4_Pin, a.ATT_4DB);
 	HAL_GPIO_WritePin(ATT_8_GPIO_Port, ATT_8_Pin, a.ATT_8DB);
 	HAL_GPIO_WritePin(ATT_16_GPIO_Port, ATT_16_Pin, a.ATT_16DB);
-
 }
+#endif //ATTENUATOR_CODE
 
-static uint32_t start_timer(TIM_TypeDef * timer) {
+uint32_t start_timer(TIM_TypeDef * timer) {
 
 	timer->CR1 &= ~(TIM_CR1_CEN);
 	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
@@ -421,7 +187,7 @@ uint32_t stop_timer(TIM_TypeDef *timer) {
 	return timer->CNT;
 }
 
-static void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
+void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
 
 	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
 	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
@@ -453,7 +219,7 @@ static void stop_pop() {
 
 	pop_cycle_count = 0;
 	pop_running = false;
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0);
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0); //turn off amber LED
 
 	printf("POP cycle stopped!\r\n");
 
@@ -477,7 +243,7 @@ static void start_pop() {
 		Error_Handler();
 	}
 
-	timer_delay(SLOW_TIMER, 1000);
+	timer_delay(SLOW_TIMER, 1000); //100ms delay
 
 	if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
 	HRTIM_TIMERINDEX_TIMER_A,
@@ -500,116 +266,120 @@ static void start_pop() {
 
 }
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-
-	static bool synth_init = false;
-
-
-#ifdef RAMP_DAC
-	static bool dac_enabled = false;
-#endif
-
-	SystemClock_Config(); // We were in STOP mode so the HSI is selected.
-	HAL_ResumeTick();
-
-#ifdef RAMP_DAC
-	/* Start the DAC and zero its output */
-	if (!dac_enabled) {
-		if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
-			printf("Failure point F!\r\n");
-			Error_Handler();
-		}
-		if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0)
-				!= HAL_OK) {
-			printf("Failure point G!\r\n");
-			Error_Handler();
-		}
-		dac_enabled = true;
-	}
-#endif
-
-#ifdef SYNTH_ENABLE
-	if (!synth_init) {
-		if (init_synthesiser() != SUCCESS) {
-			printf("Synthesiser initialisation failed!\r\n");
-			Error_Handler();
-		}
-		synth_init = true;
-	}
-#endif
-
-	if (GPIO_Pin == GPIO_PIN_13) { // Blue button
-		printf("Blue button pressed....\r\n");
-
-		/* If the button is held down for more than one second then run the POP cycle */
-		HAL_Delay(1000);
-
-		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) {
-			printf("Long press\r\n");
-			if (pop_running) {
-				return;
-			}
-
-			start_pop();
-
-		} else {
-			printf("Short press\r\n");
-			/* We want to run CW so stop the POP cycle if it's running */
-			if (pop_running) {
-				stop_pop();
-				return;
-			}
-
-			/* Set the attenuator for minimum attenuation */
-			const struct AttenuatorSettings attenuator_settings = {0,0,0,0,0,0,0}; // 0 dB
-			set_aom_atten(attenuator_settings);
-
-			/* Enable the AOM drive power */
-			if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
-			HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
-				printf("Failure point H!\r\n");
-				Error_Handler();
-			}
-
-			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
-					HRTIM_TIMERINDEX_TIMER_A,
-					HRTIM_OUTPUT_TA1, HRTIM_OUTPUTLEVEL_INACTIVE) != HAL_OK) {
-				printf("Failure point I!\r\n");
-				Error_Handler();
-			}
-
-			/* Enable the Microwaves */
-			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
-					HRTIM_TIMERINDEX_TIMER_E,
-					HRTIM_OUTPUT_TE1, HRTIM_OUTPUTLEVEL_ACTIVE) != HAL_OK) {
-				printf("Failure point J!\r\n");
-				Error_Handler();
-			};
-
-			/* Run the frequency sweep */
-			while (1) {
-				printf("Sweep running.\r\n");
-				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-				run_sweep();
-				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-				printf("Sweep complete.\r\n");
-			}
-		}
-
-	}
-}
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) { //Simon was using this interrupt callback function to detect when the blue button was pressed
+//
+////	static bool synth_init = false; //Simon declared here but not needed if Hittite initialised in main code.
+//
+//
+////#ifdef RAMP_DAC
+////	static bool dac_enabled = false;
+////#endif
+//
+//	SystemClock_Config(); // We were in STOP mode so the HSI is selected.
+//	HAL_ResumeTick();
+//
+////#ifdef RAMP_DAC
+////	/* Start the DAC and zero its output */
+////	if (!dac_enabled) {
+////		if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
+////			printf("Failure point F!\r\n");
+////			Error_Handler();
+////		}
+////		if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0)
+////				!= HAL_OK) {
+////			printf("Failure point G!\r\n");
+////			Error_Handler();
+////		}
+////		dac_enabled = true;
+////	}
+////#endif
+//
+////#ifdef SYNTH_ENABLE
+////	if (!synth_init) {
+////		if (init_synthesiser() != SUCCESS) {
+////			printf("Synthesiser initialisation failed!\r\n");
+////			Error_Handler();
+////		}
+////		synth_init = true;
+////	}
+////#endif
+//
+//	if (GPIO_Pin == GPIO_PIN_13) { // Blue button
+//		printf("Blue button pressed....\r\n");
+//
+//		/* If the button is held down for more than one second then run the POP cycle */
+//		HAL_Delay(1000);
+//
+//		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) {
+//			printf("Long press\r\n");
+//			if (pop_running) {
+//				return;
+//			}
+//
+//			start_pop();
+//
+//		} else {
+//			printf("Short press\r\n");
+//			/* We want to run CW so stop the POP cycle if it's running */
+//			if (pop_running) {
+//				stop_pop();
+//				return;
+//			}
+//
+//#ifdef ATTENUATOR_CODE
+//			/* Set the attenuator for minimum attenuation */
+//			const struct AttenuatorSettings attenuator_settings = {0,0,0,0,0,0,0}; // 0 dB
+//			set_aom_atten(attenuator_settings);
+//#endif //ATTENUATOR_CODE
+//
+//			/* Enable the AOM drive power */
+//			if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
+//			HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
+//				printf("Failure point H!\r\n");
+//				Error_Handler();
+//			}
+//
+//			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
+//					HRTIM_TIMERINDEX_TIMER_A,
+//					HRTIM_OUTPUT_TA1, HRTIM_OUTPUTLEVEL_INACTIVE) != HAL_OK) {
+//				printf("Failure point I!\r\n");
+//				Error_Handler();
+//			}
+//
+//			/* Enable the Microwaves */
+//			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
+//					HRTIM_TIMERINDEX_TIMER_E,
+//					HRTIM_OUTPUT_TE1, HRTIM_OUTPUTLEVEL_ACTIVE) != HAL_OK) {
+//				printf("Failure point J!\r\n");
+//				Error_Handler();
+//			};
+//
+//			/* Run the frequency sweep */
+//			printf("Initiating sweep.\r\n");
+//			while (1) {
+//				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
+//				run_sweep();
+//				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
+//				printf("Sweep complete.\r\n");
+//			}
+//		}
+//
+//	}
+//}
 
 void HAL_LPTIM_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim){
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin); //toggle green LED
 }
 
 void HAL_HRTIM_Compare2EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx) {
 
 	/* Called when the first microwave pulse goes low */
 	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_E) {
+#ifdef ATTENUATOR_CODE
 		/* Configure the LASER AOM drive attenuator */
 		const struct AttenuatorSettings a = {0,0,0,0,0,1,0}; // 8 dB
 		set_aom_atten(a);
+#endif //ATTENUATOR_CODE
 	}
 
 }
@@ -618,14 +388,18 @@ void HAL_HRTIM_Compare3EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Timer
 
 	/* Called at the end of a POP cycle */
 	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_A) {
-
+#ifdef ATTENUATOR_CODE
 		/* Reset the attenuator to 0 dB */
 		const struct AttenuatorSettings a = { 0, 0, 0, 0, 0, 0, 0 }; // 0 dB
 		set_aom_atten(a);
+#endif //ATTENUATOR_CODE
 
-		static const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
-		static const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
-		static const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
+		const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
+		const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
+		const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
+//		static const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
+//		static const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
+//		static const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
 		static uint32_t i = 0;
 
 		/* Configure the Microwave frequency */
@@ -642,7 +416,7 @@ void HAL_HRTIM_Compare3EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Timer
 		i = i + 1;
 
 		pop_cycle_count = pop_cycle_count + 1;
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin); //toggle amber LED
 		printf("POP Cycle %lu done.\r\n", pop_cycle_count);
 
 	}
@@ -706,34 +480,148 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM1_Init();
   MX_HRTIM_Init();
+  MX_ADC3_Init();
+  MX_ETH_Init();
   /* USER CODE BEGIN 2 */
+  printf("\033c"); //clears screen
+  printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
 
-	printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
+#ifdef SYNTH_ENABLE
+	if (init_synthesiser(MW_power) != SUCCESS) {
+		printf("Synthesiser initialisation failed!\r\n");
+		Error_Handler();
+	}
+#ifdef MW_VERBOSE
+	printf("LO2GAIN set at: 0x%x \r\n", MW_power);
+#endif	//MW_VERBOSE
+#endif //SYNTH_ENABLE
 
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
-		printf("Failed to start slow fashing LED!\r\n");
+		printf("Failed to start slow flashing LED!\r\n");
 		Error_Handler();
 	}
-	/* Temporary Stuart code */
-	//init_synthesiser();
-	//set_frequency_hz(3035732439);
 
+	/* Start the DAC and zero its output */
+	if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
+		printf("Failure to initialise DAC \r\n");
+		Error_Handler();
+	}
+	printf("Setting DAC output to 1.00V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1241) != HAL_OK){
+			printf("DAC setup failed!\r\n");
+		Error_Handler();
+	}
+
+	/* Output used for triggering external scope */
+//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
+//	printf("Setting trigger output high \r\n");
+//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
+//	printf("Setting trigger output low \r\n");
+
+	/* Spare SMA pin */
+//	SPARE_OUT_GPIO_Port, SPARE_OUT_Pin
+//	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_SET); // Sets spare SMA output high
+//	printf("Setting spare SMA output high \r\n");
+//	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_RESET); // Sets spare SMA output low
+
+	/* Laser tuning pin */
+//	LASER_TUNING_GPIO_Port, LASER_TUNING_Pin
+	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
+	printf("Requesting FPGA CW absorption \r\n");
+//	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
+
+	/* MW invalid */
+//	MW_INVALID_GPIO_Port, MW_INVALID_Pin
+//	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); // MW_invalid output high
+	printf("Setting MW invalid output low \r\n");
+	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); // MW_invalid output low
+
+	/* Fire up the ADC */
+	// external trigger, single conversion selected in ioc file
+	// calibrate ADC for better accuracy and start it w/ interrupt
+	if(HAL_ADCEx_Calibration_Start(&hadc3, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK){
+		printf("ADC calibration failure \r\n");
+		Error_Handler();
+	}
+	printf("ADC calibrated successfully \r\n");
+	//Start the ADC with interrupts enabled
+	if(HAL_ADC_Start_IT(&hadc3) != HAL_OK){
+		printf("Failed to start ADC with interrupt capability \r\n");
+	                Error_Handler();
+	}
+	printf("ADC interrupt callback enabled \r\n");
+#ifdef QUANTIFY_ADC_NOISE
+	adc_max = 0;
+	adc_min = 60000;
+#endif //QUANTIFY_ADC_NOISE
+
+//	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+//	printf("Blue button status: %u \r\n", pin_status);
+//	last_pin_status = pin_status;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+		//POP can run in SLEEP mode
+		//
+//		if (!pop_running) {
+//			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of STOP mode.
+//			HAL_PWREx_EnableFlashPowerDown();
+//			HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs
+//		} else {
+//			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of SLEEP mode.
+//			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs.
+//		}
 
-		if (!pop_running) {
-			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of STOP mode.
-			HAL_PWREx_EnableFlashPowerDown();
-			HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs
-		} else {
-			HAL_SuspendTick(); // Needs to be paused or the interrupt will bring us out of SLEEP mode.
-			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI); // We will only resume when an interrupt occurs.
+//		pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+//		if (pin_status != last_pin_status) {
+//			printf("Blue button status: %u \r\n", pin_status);
+//			last_pin_status = pin_status;
+//		}
+
+		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+		if (blue_button_status) {// If blue button is pressed
+			printf("Blue button pressed....\r\n");
+			printf("Requesting FPGA POP \r\n");
+			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
+
+			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
+			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
+			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
+			//set_MW_power(0x03); //set maximum MW power to improve contrast
+			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
+			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
+
+			//change the MW power each time the button is pressed, unless it's the first time round this loop
+			if (mw_sweep_started) {
+				++MW_power; //increase MW_power value by 1
+				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
+					MW_power = 0;
+				}
+				set_MW_power(MW_power);
+#ifdef MW_VERBOSE
+				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
+#endif //MW_VERBOSE
+			} else {
+					printf("Initiating sweep.\r\n");
+					mw_sweep_started = true;
+			}
+			while(blue_button_status) {//remain here polling button until it is released
+				timer_delay(SLOW_TIMER, 100); //10ms delay
+				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+			}
 		}
 
+		if (mw_sweep_started) {//won't execute until the first time the blue button is pressed
+			/* Run the frequency sweep */
+			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
+			run_sweep();
+			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
+			//printf("Sweep complete.\r\n");
+			printf("LO2GAIN: 0x%x \r\n", MW_power);
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -777,7 +665,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 96;
+  RCC_OscInitStruct.PLL.PLLN = 80;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -828,6 +716,64 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief ADC3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC3_Init(void)
+{
+
+  /* USER CODE BEGIN ADC3_Init 0 */
+
+  /* USER CODE END ADC3_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC3_Init 1 */
+
+  /* USER CODE END ADC3_Init 1 */
+
+  /** Common config
+  */
+  hadc3.Instance = ADC3;
+  hadc3.Init.Resolution = ADC_RESOLUTION_16B;
+  hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc3.Init.LowPowerAutoWait = DISABLE;
+  hadc3.Init.ContinuousConvMode = DISABLE;
+  hadc3.Init.NbrOfConversion = 1;
+  hadc3.Init.DiscontinuousConvMode = DISABLE;
+  hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIG_EXT_IT11;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc3.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR;
+  hadc3.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc3.Init.LeftBitShift = ADC_LEFTBITSHIFT_NONE;
+  hadc3.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  sConfig.OffsetSignedSaturation = DISABLE;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC3_Init 2 */
+
+  /* USER CODE END ADC3_Init 2 */
+
+}
+
+/**
   * @brief DAC1 Initialization Function
   * @param None
   * @retval None
@@ -865,8 +811,64 @@ static void MX_DAC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN DAC1_Init 2 */
+  /** DAC auto-calibration
+  */
+//  if (HAL_DACEx_SelfCalibrate(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+//  {
+//    printf("Failed to auto-calibrate DAC \r\n");
+//    Error_Handler();
+//  }
 
   /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief ETH Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ETH_Init(void)
+{
+
+  /* USER CODE BEGIN ETH_Init 0 */
+
+  /* USER CODE END ETH_Init 0 */
+
+   static uint8_t MACAddr[6];
+
+  /* USER CODE BEGIN ETH_Init 1 */
+
+  /* USER CODE END ETH_Init 1 */
+  heth.Instance = ETH;
+  MACAddr[0] = 0x00;
+  MACAddr[1] = 0x80;
+  MACAddr[2] = 0xE1;
+  MACAddr[3] = 0x00;
+  MACAddr[4] = 0x00;
+  MACAddr[5] = 0x00;
+  heth.Init.MACAddr = &MACAddr[0];
+  heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
+  heth.Init.TxDesc = DMATxDscrTab;
+  heth.Init.RxDesc = DMARxDscrTab;
+  heth.Init.RxBuffLen = 1524;
+
+  /* USER CODE BEGIN MACADDRESS */
+
+  /* USER CODE END MACADDRESS */
+
+  if (HAL_ETH_Init(&heth) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  memset(&TxConfig, 0 , sizeof(ETH_TxPacketConfig));
+  TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
+  TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
+  TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
+  /* USER CODE BEGIN ETH_Init 2 */
+
+  /* USER CODE END ETH_Init 2 */
 
 }
 
@@ -1205,14 +1207,19 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, ATT_4_Pin|ATT_8_Pin|ATT_16_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LD1_Pin|MW_INVALID_Pin|LASER_TUNING_Pin|LD3_Pin
+                          |SPARE_OUT_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(USB_OTG_FS_PWR_EN_GPIO_Port, USB_OTG_FS_PWR_EN_Pin, GPIO_PIN_RESET);
@@ -1237,42 +1244,33 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  /*Configure GPIO pin : BLUE_BUTTON_Pin */
+  GPIO_InitStruct.Pin = BLUE_BUTTON_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(BLUE_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC1 PC4 PC5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_4|GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PA1 PA2 PA7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : LD1_Pin LD3_Pin */
-  GPIO_InitStruct.Pin = LD1_Pin|LD3_Pin;
+  /*Configure GPIO pins : LD1_Pin MW_INVALID_Pin LASER_TUNING_Pin LD3_Pin
+                           SPARE_OUT_Pin */
+  GPIO_InitStruct.Pin = LD1_Pin|MW_INVALID_Pin|LASER_TUNING_Pin|LD3_Pin
+                          |SPARE_OUT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PB13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  /*Configure GPIO pin : PF11 */
+  GPIO_InitStruct.Pin = GPIO_PIN_11;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SCOPE_TRIG_OUT_Pin */
+  GPIO_InitStruct.Pin = SCOPE_TRIG_OUT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(SCOPE_TRIG_OUT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : USB_OTG_FS_PWR_EN_Pin ATT_2_Pin ATT_1_Pin ATT_05_Pin
                            ATT_025_Pin ATT_LE_Pin */
@@ -1310,16 +1308,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MISO_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PG11 PG13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 15, 0);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -1327,6 +1317,27 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  adc_val = HAL_ADC_GetValue(&hadc3);
+  //printf("ADC value: %lu \r\n", adc_val);
+  dac_val = adc_val >> 4;
+#ifdef QUANTIFY_ADC_NOISE
+  if (adc_val < adc_min) {
+	  adc_min = adc_val;
+	  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+  }
+  if (adc_val > adc_max) {
+	  adc_max = adc_val;
+	  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+  }
+  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+#endif //QUANTIFY_ADC_NOISE
+  //printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
+  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+  //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2048);
+}
 
 /* USER CODE END 4 */
 
@@ -1346,10 +1357,10 @@ void Error_Handler(void)
 	HAL_HRTIM_WaveformCounterStop_IT(&hhrtim, HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E);
 
 	/* Power down the synthesiser */
-	//HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0);
+	HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 0);
 
 	while (1) {
-		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); //toggle red LED
 		timer_delay(SLOW_TIMER, ERROR_LED_DELAY);
 	}
   /* USER CODE END Error_Handler_Debug */

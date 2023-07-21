@@ -71,8 +71,17 @@ void Error_Handler(void);
 #define ATT_8_GPIO_Port GPIOE
 #define ATT_16_Pin GPIO_PIN_5
 #define ATT_16_GPIO_Port GPIOE
+#define BLUE_BUTTON_Pin GPIO_PIN_13
+#define BLUE_BUTTON_GPIO_Port GPIOC
+#define BLUE_BUTTON_EXTI_IRQn EXTI15_10_IRQn
 #define LD1_Pin GPIO_PIN_0
 #define LD1_GPIO_Port GPIOB
+#define MW_INVALID_Pin GPIO_PIN_1
+#define MW_INVALID_GPIO_Port GPIOB
+#define SCOPE_TRIG_OUT_Pin GPIO_PIN_0
+#define SCOPE_TRIG_OUT_GPIO_Port GPIOG
+#define LASER_TUNING_Pin GPIO_PIN_12
+#define LASER_TUNING_GPIO_Port GPIOB
 #define LD3_Pin GPIO_PIN_14
 #define LD3_GPIO_Port GPIOB
 #define STLINK_RX_Pin GPIO_PIN_8
@@ -103,10 +112,16 @@ void Error_Handler(void);
 #define ATT_025_GPIO_Port GPIOD
 #define ATT_LE_Pin GPIO_PIN_7
 #define ATT_LE_GPIO_Port GPIOD
+#define SPARE_OUT_Pin GPIO_PIN_8
+#define SPARE_OUT_GPIO_Port GPIOB
 #define LD2_Pin GPIO_PIN_1
 #define LD2_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
+//extern TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
+//extern TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
+extern TIM_TypeDef * FAST_TIMER; // Clocked at 100 kHz
+extern TIM_TypeDef * SLOW_TIMER; // Clocked at 10 kHz
 
 /* USER CODE END Private defines */
 

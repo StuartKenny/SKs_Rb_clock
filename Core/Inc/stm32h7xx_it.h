@@ -59,6 +59,7 @@ void EXTI15_10_IRQHandler(void);
 void LPTIM1_IRQHandler(void);
 void HRTIM1_TIMA_IRQHandler(void);
 void HRTIM1_TIME_IRQHandler(void);
+void ADC3_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
