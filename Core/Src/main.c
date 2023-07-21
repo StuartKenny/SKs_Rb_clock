@@ -93,8 +93,6 @@ UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 //Timers defined here but declared in main.h
-//TIM_TypeDef * FAST_TIMER; // Clocked at 100 kHz.
-//TIM_TypeDef * SLOW_TIMER; // Clocked at 10 kHz.
 TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
 TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
@@ -592,9 +590,9 @@ int main(void)
 			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
 			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
 			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
-			set_MW_power(0x03); //set maximum MW power to improve contrast
+			//set_MW_power(0x03); //set maximum MW power to improve contrast
 			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
-			MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
+			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
 
 			//change the MW power each time the button is pressed, unless it's the first time round this loop
 			if (mw_sweep_started) {

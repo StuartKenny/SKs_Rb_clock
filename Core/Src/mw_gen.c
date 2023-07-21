@@ -44,17 +44,15 @@ static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
 //static const uint32_t LOCK_WAIT_US = 10; // 10 us SB original definition
 //static const uint32_t LOCK_WAIT_US = 1000; // 1ms (10us was regularly timing out)
-static const uint32_t MW_STABILISE_TIME_US = 2000; // 2ms for MW output to stabilise before signalling FPGA
-//static const uint32_t DWELL_TIME_US = 100; // 100us
-//static const uint32_t DWELL_TIME_US = 5960; // 5.96ms x 1679 steps for 10s ramp (12.7s in practice)
-//static const uint32_t DWELL_TIME_US = 400; // (0.4ms + measured 1.6ms processing) x 1679 steps for 3.3s ramp
-//static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
-//static const uint32_t DWELL_TIME_US = 114200; // (114.2ms + 2ms MW_stabilise + measured 2.9ms processing) x 1679 steps for 200s ramp
-//static const uint32_t DWELL_TIME_US = 10000; // (10ms + 2ms MW_stabilise + measured 2.9ms processing) x 1679 steps for 25s ramp
-static const uint32_t DWELL_TIME_US = 7000; // (7.0ms + 2ms MW_stabilise + measured 2.9ms processing) x 1679 steps for 19.5s ramp
-//static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + measured 1.6ms processing) x 1679 steps for 10s ramp
-//static const uint32_t DWELL_TIME_US = 59600; // 59.6ms x 1679 steps for 100s ramp (102s in practice)
-//static const uint32_t DWELL_TIME_US = 1000000; // 1s for accurate spectrum analyser readings
+//static const uint32_t MW_STABILISE_TIME_US = 10000; // 10ms for MW output to stabilise before signalling FPGA
+static const uint32_t MW_STABILISE_TIME_US = 1000; // 1ms for MW output to stabilise before signalling FPGA
+//static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 30.5s ramp
+//static const uint32_t DWELL_TIME_US = 1000; // (1ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 4.8s ramp
+static const uint32_t DWELL_TIME_US = 1180; // (1.2ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 5.1s ramp
+//static const uint32_t DWELL_TIME_US = 12000; //
+//static const uint32_t DWELL_TIME_US = 283995; // (284.0ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 500s ramp
+//static const uint32_t DWELL_TIME_US = 1177380; // (1177.4ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 2000s ramp
+
 //static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
@@ -64,9 +62,11 @@ static const double REF_FREQ = 50E6;
 //NOTE - these values are measured and not consistent with datasheet
 static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
 
-/* Mute MW generation whilst changing frequency */
+/* Mute MW generation whilst changing frequency
+ * None of these appear to work particularly well all require 9-10ms to stabilise afterwards.
+ * If both are disabled then stabilising time is slightly improved */
 static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
-static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled
+static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled. Approx 9ms to re-stabilise MW output if enabled
 
 //MW sweep settings have been selected so that all values can be represented exactly as binary fractions
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
@@ -365,12 +365,6 @@ void set_frequency_hz(const double fo) {
 
 void run_sweep() {
 
-	/* Output used for triggering external scope */
-	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
-#ifdef MW_VERBOSE
-	printf("Setting trigger output low \r\n");
-#endif
-
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
 
 #ifdef RAMP_DAC
@@ -388,12 +382,17 @@ void run_sweep() {
 
 	//__disable_irq(); //Simon's code had IRQs disabled
 
+	/* Output used for triggering external scope */
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
+#ifdef MW_VERBOSE
+	printf("Setting trigger output low \r\n");
+#endif
 
 	for (uint32_t i = 0; i < num_points; i++) {
 
 		double fo = start_freq + (i * sweep_settings.step_size);
 		set_frequency_hz(fo);
+		//printf("Point: %lu, ", i);
 
 
 #ifdef RAMP_DAC
@@ -405,10 +404,11 @@ void run_sweep() {
 #endif
 
 		timer_delay(FAST_TIMER, DWELL_TIME_US);
-		////////
+
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Terminating sweep early as blue button pressed \r\n");
+			HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 			break;
 		}
 	}
@@ -487,3 +487,12 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
 	read_data |= GPO_setting; //Select GPO output dependent on function input value
 	synth_writereg(read_data, GPO_REGISTER, 0x0, VERIFY); // Update the GPO register.
 }
+
+///* Calculates sweep time and returns value in seconds*/
+//float calculate_sweep_time(void) {
+//	const uint32 PROCESS_TIME_US = 234;
+//	const uint32 SWEEP_TIME_US = PROCESS_TIME_US + MW_STABILISE_TIME_US + DWELL_TIME_US
+//	const double SWEEP_TIME_S;
+//
+//}
+
