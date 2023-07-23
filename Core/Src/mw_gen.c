@@ -1,3 +1,27 @@
+/**
+ ******************************************************************************
+ * @file           : template.c
+ * @brief          : Functionality x
+ * @authors		   : Simon J. Bale with updates and modifications by Stuart Kenny
+ ******************************************************************************
+   * @attention
+  *
+  * Copyright (c) 2023 Simon J. Bale & Stuart Kenny.
+  * All rights reserved.
+  *
+  *
+  ******************************************************************************
+  */
+
+/* Function prototypes -----------------------------------------------*/
+//__attribute__((section(".itcm"))) static uint32_t template_function(const uint32_t data, const bool verify);
+//extern void Error_Handler(void);
+
+/**
+  * @brief  Function x.
+  * @retval int
+  */
+
 /* Includes ------------------------------------------------------------------*/
 #include "mw_gen.h"
 #include "main.h" //needed for port and timer definitions

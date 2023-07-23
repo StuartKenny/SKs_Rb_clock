@@ -3,13 +3,13 @@
  ******************************************************************************
  * @file           : main.c
  * @brief          : Main program body
- * @author		   : Simon J. Bale
+ * @authors		   : Simon J. Bale and Stuart Kenny
  ******************************************************************************
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "string.h"
+#include "lwip.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -24,19 +24,6 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-#define ATTENUATOR_CODE //include code related to AOM attenuator (SBJK clock)
-#ifdef ATTENUATOR_CODE
-struct AttenuatorSettings
-{
-    const GPIO_PinState ATT_0DB25 : 1;  // 1-bit unsigned field: 0.25 dB
-    const GPIO_PinState ATT_0DB5 : 1;  // 1-bit unsigned field: 0.5 dB
-    const GPIO_PinState ATT_1DB : 1;  // 1-bit unsigned field: 1 dB
-    const GPIO_PinState ATT_2DB : 1;  // 1-bit unsigned field: 2 dB
-    const GPIO_PinState ATT_4DB : 1;  // 1-bit unsigned field: 4 dB
-    const GPIO_PinState ATT_8DB : 1;  // 1-bit unsigned field: 8 dB
-    const GPIO_PinState ATT_16DB : 1;  // 1-bit unsigned field: 16 dB
-};
-#endif //ATTENUATOR_CODE
 
 /* USER CODE END PTD */
 
@@ -57,30 +44,9 @@ struct AttenuatorSettings
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-#if defined ( __ICCARM__ ) /*!< IAR Compiler */
-#pragma location=0x30000000
-ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
-#pragma location=0x30000200
-ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
-
-#elif defined ( __CC_ARM )  /* MDK ARM Compiler */
-
-__attribute__((at(0x30000000))) ETH_DMADescTypeDef  DMARxDscrTab[ETH_RX_DESC_CNT]; /* Ethernet Rx DMA Descriptors */
-__attribute__((at(0x30000200))) ETH_DMADescTypeDef  DMATxDscrTab[ETH_TX_DESC_CNT]; /* Ethernet Tx DMA Descriptors */
-
-#elif defined ( __GNUC__ ) /* GNU Compiler */
-ETH_DMADescTypeDef DMARxDscrTab[ETH_RX_DESC_CNT] __attribute__((section(".RxDecripSection"))); /* Ethernet Rx DMA Descriptors */
-ETH_DMADescTypeDef DMATxDscrTab[ETH_TX_DESC_CNT] __attribute__((section(".TxDecripSection")));   /* Ethernet Tx DMA Descriptors */
-
-#endif
-
-ETH_TxPacketConfig TxConfig;
-
 ADC_HandleTypeDef hadc3;
 
 DAC_HandleTypeDef hdac1;
-
-ETH_HandleTypeDef heth;
 
 HRTIM_HandleTypeDef hhrtim;
 
@@ -92,9 +58,6 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-//Timers defined here but declared in main.h
-TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
-TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 
 extern SweepSettings const sweep_settings;
@@ -103,22 +66,20 @@ extern uint32_t _siitcm;
 extern uint32_t _sitcm;
 extern uint32_t _eitcm;
 
-static volatile bool pop_running = false;
 static volatile bool mw_sweep_started = false;
-static volatile uint32_t pop_cycle_count = 0;
 volatile bool blue_button_status; //blue button state. 1 when pressed
-//static volatile bool pin_status; //blue button state. 1 when pressed
 //static bool last_pin_status; //previous blue button state
+
 static uint8_t MW_power = 0x1; // Initial MW power i.e. LO2GAIN
 //3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
+
 uint32_t adc_val; //used to store adc3 readings
 #ifdef QUANTIFY_ADC_NOISE
 uint32_t adc_max, adc_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
 uint32_t dac_val; //for dac1 output channel 1
-
 
 /* USER CODE END PV */
 
@@ -132,7 +93,6 @@ static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_HRTIM_Init(void);
 static void MX_ADC3_Init(void);
-static void MX_ETH_Init(void);
 /* USER CODE BEGIN PFP */
 
 extern uint32_t set_MW_power (const uint8_t mw_power);
@@ -140,14 +100,11 @@ extern uint32_t init_synthesiser(const uint8_t mw_power);
 extern void set_frequency_hz(const double fo);
 extern void run_sweep();
 extern void MW_frequency_toggle (const double f_one, const double f_two);
-__attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
-__attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
-__attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
-__attribute__((section(".itcm"))) static void start_pop();
-__attribute__((section(".itcm"))) static void stop_pop();
-#ifdef ATTENUATOR_CODE
-__attribute__((section(".itcm"))) static void set_aom_atten(const struct AttenuatorSettings a);
-#endif //ATTENUATOR_CODE
+//extern uint32_t start_timer(TIM_TypeDef * timer);
+//extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
+//extern static void start_pop();
+//extern static void stop_pop();
 
 /* USER CODE END PFP */
 
@@ -157,282 +114,6 @@ __attribute__((section(".itcm"))) static void set_aom_atten(const struct Attenua
 PUTCHAR_PROTOTYPE {
 	HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
 	return ch;
-}
-
-#ifdef ATTENUATOR_CODE
-static void set_aom_atten(const struct AttenuatorSettings a) {
-	HAL_GPIO_WritePin(ATT_LE_GPIO_Port, ATT_LE_Pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(ATT_025_GPIO_Port, ATT_025_Pin, a.ATT_0DB25);
-	HAL_GPIO_WritePin(ATT_05_GPIO_Port, ATT_05_Pin, a.ATT_0DB5);
-	HAL_GPIO_WritePin(ATT_1_GPIO_Port, ATT_1_Pin, a.ATT_1DB);
-	HAL_GPIO_WritePin(ATT_2_GPIO_Port, ATT_2_Pin, a.ATT_2DB);
-	HAL_GPIO_WritePin(ATT_4_GPIO_Port, ATT_4_Pin, a.ATT_4DB);
-	HAL_GPIO_WritePin(ATT_8_GPIO_Port, ATT_8_Pin, a.ATT_8DB);
-	HAL_GPIO_WritePin(ATT_16_GPIO_Port, ATT_16_Pin, a.ATT_16DB);
-}
-#endif //ATTENUATOR_CODE
-
-uint32_t start_timer(TIM_TypeDef * timer) {
-
-	timer->CR1 &= ~(TIM_CR1_CEN);
-	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
-	timer->CR1 |= TIM_CR1_CEN;
-	return timer->CNT;
-
-}
-
-uint32_t stop_timer(TIM_TypeDef *timer) {
-
-	timer->CR1 &= ~(TIM_CR1_CEN);
-	return timer->CNT;
-}
-
-void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
-
-	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
-	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
-	timer->CR1 |= TIM_CR1_CEN; // Enable the timer
-	uint32_t start = timer->CNT; // Get the start value of the timer
-
-	/* Note that we don't consider overflow, if the timer is clocked at 1 MHz
-	 * a 16 bit counter will take approximately 65 ms to overflow. */
-
-	while((timer->CNT - start) < delay_count){} // Loop until delay_us has expired
-	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
-
-}
-
-static void stop_pop() {
-
-	/* Timer A is the LASER enable, Timer E is the microwave pulse */
-	if (HAL_HRTIM_WaveformOutputStop(&hhrtim,
-	HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
-		printf("POP failure point A!\r\n");
-		Error_Handler();
-	}
-
-	if (HAL_HRTIM_WaveformCounterStop_IT(&hhrtim,
-	HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E) != HAL_OK) {
-		printf("POP failure point B!\r\n");
-		Error_Handler();
-	}
-
-	pop_cycle_count = 0;
-	pop_running = false;
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0); //turn off amber LED
-
-	printf("POP cycle stopped!\r\n");
-
-}
-
-static void start_pop() {
-
-	/* Timer A is the LASER enable, Timer E is the microwave pulse */
-	if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
-	HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
-		printf("Failed to start POP!\r\n");
-		Error_Handler();
-	}
-
-#ifdef POP_START_PULSE
-
-	if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
-	HRTIM_TIMERINDEX_TIMER_A,
-	HRTIM_OUTPUT_TA2, HRTIM_OUTPUTLEVEL_INACTIVE) != HAL_OK) {
-		printf("POP failure point C!\r\n");
-		Error_Handler();
-	}
-
-	timer_delay(SLOW_TIMER, 1000); //100ms delay
-
-	if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
-	HRTIM_TIMERINDEX_TIMER_A,
-	HRTIM_OUTPUT_TA2, HRTIM_OUTPUTLEVEL_ACTIVE) != HAL_OK) {
-		printf("POP failure point D!\r\n");
-		Error_Handler();
-	}
-
-#endif
-
-	if (HAL_HRTIM_WaveformCounterStart_IT(&hhrtim,
-	HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E) != HAL_OK) {
-		printf("POP failure point E!\r\n");
-		Error_Handler();
-	}
-
-	pop_running = true;
-
-	printf("POP cycle running!\r\n");
-
-}
-
-//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) { //Simon was using this interrupt callback function to detect when the blue button was pressed
-//
-////	static bool synth_init = false; //Simon declared here but not needed if Hittite initialised in main code.
-//
-//
-////#ifdef RAMP_DAC
-////	static bool dac_enabled = false;
-////#endif
-//
-//	SystemClock_Config(); // We were in STOP mode so the HSI is selected.
-//	HAL_ResumeTick();
-//
-////#ifdef RAMP_DAC
-////	/* Start the DAC and zero its output */
-////	if (!dac_enabled) {
-////		if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
-////			printf("Failure point F!\r\n");
-////			Error_Handler();
-////		}
-////		if (HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0)
-////				!= HAL_OK) {
-////			printf("Failure point G!\r\n");
-////			Error_Handler();
-////		}
-////		dac_enabled = true;
-////	}
-////#endif
-//
-////#ifdef SYNTH_ENABLE
-////	if (!synth_init) {
-////		if (init_synthesiser() != SUCCESS) {
-////			printf("Synthesiser initialisation failed!\r\n");
-////			Error_Handler();
-////		}
-////		synth_init = true;
-////	}
-////#endif
-//
-//	if (GPIO_Pin == GPIO_PIN_13) { // Blue button
-//		printf("Blue button pressed....\r\n");
-//
-//		/* If the button is held down for more than one second then run the POP cycle */
-//		HAL_Delay(1000);
-//
-//		if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) {
-//			printf("Long press\r\n");
-//			if (pop_running) {
-//				return;
-//			}
-//
-//			start_pop();
-//
-//		} else {
-//			printf("Short press\r\n");
-//			/* We want to run CW so stop the POP cycle if it's running */
-//			if (pop_running) {
-//				stop_pop();
-//				return;
-//			}
-//
-//#ifdef ATTENUATOR_CODE
-//			/* Set the attenuator for minimum attenuation */
-//			const struct AttenuatorSettings attenuator_settings = {0,0,0,0,0,0,0}; // 0 dB
-//			set_aom_atten(attenuator_settings);
-//#endif //ATTENUATOR_CODE
-//
-//			/* Enable the AOM drive power */
-//			if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
-//			HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
-//				printf("Failure point H!\r\n");
-//				Error_Handler();
-//			}
-//
-//			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
-//					HRTIM_TIMERINDEX_TIMER_A,
-//					HRTIM_OUTPUT_TA1, HRTIM_OUTPUTLEVEL_INACTIVE) != HAL_OK) {
-//				printf("Failure point I!\r\n");
-//				Error_Handler();
-//			}
-//
-//			/* Enable the Microwaves */
-//			if (HAL_HRTIM_WaveformSetOutputLevel(&hhrtim,
-//					HRTIM_TIMERINDEX_TIMER_E,
-//					HRTIM_OUTPUT_TE1, HRTIM_OUTPUTLEVEL_ACTIVE) != HAL_OK) {
-//				printf("Failure point J!\r\n");
-//				Error_Handler();
-//			};
-//
-//			/* Run the frequency sweep */
-//			printf("Initiating sweep.\r\n");
-//			while (1) {
-//				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
-//				run_sweep();
-//				HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
-//				printf("Sweep complete.\r\n");
-//			}
-//		}
-//
-//	}
-//}
-
-void HAL_LPTIM_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim){
-	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin); //toggle green LED
-}
-
-void HAL_HRTIM_Compare2EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx) {
-
-	/* Called when the first microwave pulse goes low */
-	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_E) {
-#ifdef ATTENUATOR_CODE
-		/* Configure the LASER AOM drive attenuator */
-		const struct AttenuatorSettings a = {0,0,0,0,0,1,0}; // 8 dB
-		set_aom_atten(a);
-#endif //ATTENUATOR_CODE
-	}
-
-}
-
-void HAL_HRTIM_Compare3EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx) {
-
-	/* Called at the end of a POP cycle */
-	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_A) {
-#ifdef ATTENUATOR_CODE
-		/* Reset the attenuator to 0 dB */
-		const struct AttenuatorSettings a = { 0, 0, 0, 0, 0, 0, 0 }; // 0 dB
-		set_aom_atten(a);
-#endif //ATTENUATOR_CODE
-
-		const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
-		const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
-		const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
-//		static const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
-//		static const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
-//		static const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
-		static uint32_t i = 0;
-
-		/* Configure the Microwave frequency */
-		if (i == num_points) {
-			stop_pop();
-			i = 0;
-			start_pop();
-		}
-
-#ifdef SYNTH_ENABLE
-		set_frequency_hz(start_freq + (i * sweep_settings.step_size));
-#endif
-
-		i = i + 1;
-
-		pop_cycle_count = pop_cycle_count + 1;
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin); //toggle amber LED
-		printf("POP Cycle %lu done.\r\n", pop_cycle_count);
-
-	}
-
-	/* Called when the second microwave pulse goes high */
-	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_E) {
-	}
-
-}
-
-void HAL_HRTIM_RepetitionEventCallback(HRTIM_HandleTypeDef *hhrtim,
-		uint32_t TimerIdx) {
-
-	/* Called at the start of the next POP cycle */
-	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_A) {
-	}
 }
 
 /* USER CODE END 0 */
@@ -481,7 +162,7 @@ int main(void)
   MX_TIM1_Init();
   MX_HRTIM_Init();
   MX_ADC3_Init();
-  MX_ETH_Init();
+  MX_LWIP_Init();
   /* USER CODE BEGIN 2 */
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
@@ -820,55 +501,6 @@ static void MX_DAC1_Init(void)
 //  }
 
   /* USER CODE END DAC1_Init 2 */
-
-}
-
-/**
-  * @brief ETH Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ETH_Init(void)
-{
-
-  /* USER CODE BEGIN ETH_Init 0 */
-
-  /* USER CODE END ETH_Init 0 */
-
-   static uint8_t MACAddr[6];
-
-  /* USER CODE BEGIN ETH_Init 1 */
-
-  /* USER CODE END ETH_Init 1 */
-  heth.Instance = ETH;
-  MACAddr[0] = 0x00;
-  MACAddr[1] = 0x80;
-  MACAddr[2] = 0xE1;
-  MACAddr[3] = 0x00;
-  MACAddr[4] = 0x00;
-  MACAddr[5] = 0x00;
-  heth.Init.MACAddr = &MACAddr[0];
-  heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
-  heth.Init.TxDesc = DMATxDscrTab;
-  heth.Init.RxDesc = DMARxDscrTab;
-  heth.Init.RxBuffLen = 1524;
-
-  /* USER CODE BEGIN MACADDRESS */
-
-  /* USER CODE END MACADDRESS */
-
-  if (HAL_ETH_Init(&heth) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  memset(&TxConfig, 0 , sizeof(ETH_TxPacketConfig));
-  TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
-  TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
-  TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
-  /* USER CODE BEGIN ETH_Init 2 */
-
-  /* USER CODE END ETH_Init 2 */
 
 }
 
