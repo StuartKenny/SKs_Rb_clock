@@ -57,8 +57,8 @@ TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
 TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
 
 /* Function prototypes -----------------------------------------------*/
-__attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
-__attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) uint32_t static start_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) uint32_t static stop_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 __attribute__((section(".itcm"))) void start_pop();
 __attribute__((section(".itcm"))) void stop_pop();
@@ -84,7 +84,11 @@ static void set_aom_atten(const struct AttenuatorSettings a) {
 }
 #endif //ATTENUATOR_CODE
 
-uint32_t start_timer(TIM_TypeDef * timer) {
+/**
+  * @brief  Starts a timer.
+  * @retval uint32_t
+  */
+uint32_t static start_timer(TIM_TypeDef * timer) {
 
 	timer->CR1 &= ~(TIM_CR1_CEN);
 	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
@@ -93,24 +97,35 @@ uint32_t start_timer(TIM_TypeDef * timer) {
 
 }
 
-uint32_t stop_timer(TIM_TypeDef *timer) {
+/**
+  * @brief  Stops a timer.
+  * @retval uint32_t
+  */
+uint32_t static stop_timer(TIM_TypeDef *timer) {
 
 	timer->CR1 &= ~(TIM_CR1_CEN);
 	return timer->CNT;
 }
 
+/**
+  * @brief  Uses a H/W timer to loop for the cycle count requested.
+  */
 void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
 
-	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
-	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
-	timer->CR1 |= TIM_CR1_CEN; // Enable the timer
-	uint32_t start = timer->CNT; // Get the start value of the timer
+	/* Note that we don't consider overflow.
+	 * FAST_TIMER will take approximately 650 ms to overflow.
+	 * SLOW_TIMER will take 6.5s */
 
-	/* Note that we don't consider overflow, if the timer is clocked at 1 MHz
-	 * a 16 bit counter will take approximately 65 ms to overflow. */
+	uint32_t start = start_timer(timer);
+//	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
+//	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
+//	timer->CR1 |= TIM_CR1_CEN; // Enable the timer
+//	uint32_t start = timer->CNT; // Get the start value of the timer
 
 	while((timer->CNT - start) < delay_count){} // Loop until delay_us has expired
-	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
+
+	stop_timer(timer);
+//	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
 
 }
 

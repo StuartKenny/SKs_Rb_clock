@@ -111,6 +111,11 @@ extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/**
+  * @brief  Retargets the C library printf function to the USART.
+  * @param  None
+  * @retval None
+  */
 PUTCHAR_PROTOTYPE {
 	HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
 	return ch;

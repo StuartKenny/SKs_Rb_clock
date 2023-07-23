@@ -43,6 +43,7 @@
 #define HALT_ON_LOSS_OF_LOCK
 #define VERIFY 1 //constant, don't touch
 #define DONT_VERIFY 0 //constant, don't touch
+#define OPTIMISED_FOR_3_035GHZ_GENERATION //skips calculation of k as k is always 1
 
 /* HMC835LP6GE Register addresses */
 #define ID_REGISTER 0x00 //read-only
@@ -58,29 +59,22 @@
 #define MODES_REGISTER 0x17
 
 /* Private variables ---------------------------------------------------------*/
-//static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
-//static TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
-//static TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
 //Timers are declared in main.h and defined in main.c
-//TIM_TypeDef * FAST_TIMER; // Clocked at 100 kHz.
-//TIM_TypeDef * SLOW_TIMER; // Clocked at 10 kHz.
 static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
-//static const uint32_t LOCK_WAIT_US = 10; // 10 us SB original definition
-//static const uint32_t LOCK_WAIT_US = 1000; // 1ms (10us was regularly timing out)
+
+//The following timer constants are used to program a 16-bit register i.e. 65535 max
 //static const uint32_t MW_STABILISE_TIME_US = 10000; // 10ms for MW output to stabilise before signalling FPGA
 static const uint32_t MW_STABILISE_TIME_US = 1000; // 1ms for MW output to stabilise before signalling FPGA
 //static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 30.5s ramp
 //static const uint32_t DWELL_TIME_US = 1000; // (1ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 4.8s ramp
 static const uint32_t DWELL_TIME_US = 1180; // (1.2ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 5.1s ramp
 //static const uint32_t DWELL_TIME_US = 12000; //
-//static const uint32_t DWELL_TIME_US = 283995; // (284.0ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 500s ramp
-//static const uint32_t DWELL_TIME_US = 1177380; // (1177.4ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 2000s ramp
 
-//static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
 static const double REF_FREQ = 50E6;
+
 //static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
@@ -92,7 +86,10 @@ static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
 static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
 static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled. Approx 9ms to re-stabilise MW output if enabled
 
-//MW sweep settings have been selected so that all values can be represented exactly as binary fractions
+/* MW sweep settings {req_start_freq, req_stop_freq, step_size}
+ * Requested frequencies will potentially be tweaked into values that can be programmed into the HMC835
+ * Step size must be a multiple of 2.98Hz (see datasheet S1.3.7.4.4 on fractional tuning)
+ */
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035736939GHz
 //SweepSettings const sweep_settings = {3.0357344390E9, 3.0357394390e9, (50e6 / (1 << 24)) }; //SB original settings
 //For 5kHz sweep, 2.98Hz x 1679 steps, centred around 3.035735189GHz
@@ -110,7 +107,7 @@ __attribute__((section(".itcm"))) static uint32_t synth_writereg(const uint32_t 
 __attribute__((section(".itcm"))) static uint32_t synth_readreg(const uint32_t reg_address);
 __attribute__((section(".itcm"))) uint32_t set_MW_power (const uint8_t mw_power);
 __attribute__((section(".itcm"))) uint32_t init_synthesiser(const uint8_t mw_power);
-__attribute__((section(".itcm"))) static const bool poll_until_locked(uint32_t timeout);
+//__attribute__((section(".itcm"))) static const bool poll_until_locked(uint32_t timeout);
 __attribute__((section(".itcm"))) static const bool lock_status(void);
 __attribute__((section(".itcm"))) static void mute_mw_outputs();
 __attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
@@ -123,6 +120,14 @@ extern uint32_t stop_timer(TIM_TypeDef * timer);
 extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 extern void Error_Handler(void);
 
+/**
+  * @brief  Writes to a register over SPI.
+  * @param  Data
+  * @param  Address
+  * @param  Chip address
+  * @param  Verify
+  * @retval Contents read back from register
+  */
 static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, const uint32_t chip_address, const bool verify) {
 
 	uint32_t read_data = 0;
@@ -161,6 +166,11 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
 	return read_data;
 }
 
+/**
+  * @brief  Reads a register.
+  * @param  Address
+  * @retval Register contents
+  */
 static uint32_t synth_readreg(const uint32_t reg_address){
 
     synth_writereg(reg_address, 0x0, 0x0, DONT_VERIFY); // First cycle to send the read address
@@ -170,7 +180,11 @@ static uint32_t synth_readreg(const uint32_t reg_address){
 
 }
 
-/* Program LO2 output gain */
+/**
+  * @brief  Program LO2 output gain.
+  * @param  MW power setting
+  * @retval Success/fail
+  */
 uint32_t set_MW_power (const uint8_t mw_power) {
 	if (mw_power > 3) {//check that LO2GAIN is an integer from 0 to 3 inclusive
 		printf("illegal mw_power - must be an integer from 0 to 3!\n");
@@ -187,14 +201,18 @@ uint32_t set_MW_power (const uint8_t mw_power) {
 	return SUCCESS;
 }
 
+/**
+  * @brief  Initialises HMC835 synthesiser.
+  * @param  MW power setting
+  * @retval Success/fail
+  */
 uint32_t init_synthesiser(const uint8_t mw_power) {
 
+	//Set pins to required initial conditions
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off the amber lock LED
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
-
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 1);
-
 	HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 1); // Enable the main regulator.
 
 	HAL_Delay(100); // Wait 100 ms for the supply to stabilise.
@@ -271,26 +289,31 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
 	return SUCCESS;
 }
 
-static const bool poll_until_locked(uint32_t timeout) {
+//static const bool poll_until_locked(uint32_t timeout) {
+//
+//	bool locked = false;
+//
+//	/* Check for lock */
+//	uint32_t start = start_timer(FAST_TIMER);
+//
+//	while ((FAST_TIMER->CNT - start) < timeout) {
+//		//printf("Debug lock while condition\r\n");
+//		locked = synth_readreg(GPOLD_REGISTER) & (1UL << 1);
+//		if (locked) {
+//			stop_timer(FAST_TIMER);
+//			return true;
+//		}
+//	}
+//
+//	stop_timer(FAST_TIMER);
+//	return false;
+//}
 
-	bool locked = false;
-
-	/* Check for lock */
-	uint32_t start = start_timer(FAST_TIMER);
-
-	while ((FAST_TIMER->CNT - start) < timeout) {
-		//printf("Debug lock while condition\r\n");
-		locked = synth_readreg(GPOLD_REGISTER) & (1UL << 1);
-		if (locked) {
-			stop_timer(FAST_TIMER);
-			return true;
-		}
-	}
-
-	stop_timer(FAST_TIMER);
-	return false;
-}
-
+/**
+  * @brief  Checks for MW frequency lock
+  * @param  None
+  * @retval Lock status
+  */
 static const bool lock_status(void) {
 
 	bool locked = synth_readreg(GPOLD_REGISTER) & (1UL << 1);
@@ -298,6 +321,11 @@ static const bool lock_status(void) {
 
 }
 
+/**
+  * @brief  Mute MW output
+  * @param  None
+  * @retval None
+  */
 static void mute_mw_outputs() {
 	uint32_t read_data = 0x0;
 
@@ -307,6 +335,14 @@ static void mute_mw_outputs() {
 	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
 }
 
+/**
+  * @brief  Program HMC835 microwave frequency registers
+  * @param  Integer frequency
+  * @param  Fractional frequency
+  * @param  VCO divider value
+  * @param  Manually mute whilst changing frequency
+  * @retval None
+  */
 static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute) {
 
 	static uint32_t last_integer = -1, last_fraction = -1, last_vcodiv = -1;
@@ -337,8 +373,21 @@ static void set_frequency(const uint32_t integer, const uint32_t fraction, const
 
 }
 
+/**
+  * @brief  Translate a frequency into register values for programming to HMC835
+  * @param  Frequency
+  * @retval None
+  */
 void set_frequency_hz(const double fo) {
 
+#ifdef OPTIMISED_FOR_3_035GHZ_GENERATION
+	/* Code optimisation for Generation of frequencies close to 3.035GHz
+	 * k always equals 1
+	 */
+	uint32_t k = 1;
+#endif //OPTIMISED_FOR_3_035GHZ_GENERATION
+#ifndef OPTIMISED_FOR_3_035GHZ_GENERATION
+	/* Generic code that will work for any frequency supported by HMC835 */
 	/* For the k divider we need to find the smallest even integer or use a max of 62*/
 	uint32_t k = VCO_MAX_FREQ / fo;
 
@@ -347,6 +396,7 @@ void set_frequency_hz(const double fo) {
 			k = k - 1;
 		}
 	}
+#endif //OPTIMISED_FOR_3_035GHZ_GENERATION
 
 	/* Calculate the N division ratio */
 	const double N = ((fo * k) / REF_FREQ);
@@ -387,6 +437,7 @@ void set_frequency_hz(const double fo) {
 
 }
 
+//Simon's MW sweep function
 void run_sweep() {
 
 	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
@@ -396,6 +447,8 @@ void run_sweep() {
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
 #endif
 
+	//Converts the requested start and stop frequencies into
+	//Requires that the step size is a multiple of 2.98Hz
 	static const double start_freq = ((long)(sweep_settings.req_start_freq/sweep_settings.step_size)) * sweep_settings.step_size;
 	static const double stop_freq = ((long)((sweep_settings.req_stop_freq/sweep_settings.step_size) + 0.5)) * sweep_settings.step_size;
 	static const uint32_t num_points = ((stop_freq - start_freq)/sweep_settings.step_size) + 1;
@@ -449,6 +502,78 @@ void run_sweep() {
 #endif
 
 }
+
+/**
+  * @brief  Perform a MW sweep
+  * @param  Start frequency
+  * @param  Dwell time in us
+  * @param	Step size
+  * @param  Number of points
+  * @retval Success/failure or early termination
+  */
+static bool MW_sweep(const double start_freq, const uint32_t dwell_time_us, const double step_size, const uint32_t points) {
+
+	bool sweep_status = true;
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume we are locked, the LED will be disabled if lock fails.
+
+#ifdef RAMP_DAC
+	/* Zero the DAC output */
+	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
+	double dac_val = 0;
+#endif
+
+	/* Output used for triggering external scope */
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
+#ifdef MW_VERBOSE
+	printf("Setting trigger output low \r\n");
+#endif
+	double fo; //output frequency
+	for (uint32_t i = 0; i < points; i++) {
+		fo = start_freq + (i * step_size);
+		set_frequency_hz(fo);
+		//printf("Point: %lu, ", i);
+
+#ifdef RAMP_DAC
+		dac_val = dac_val + (4096.0/num_points);
+		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
+			printf("Failure to program value to DAC \r\n");
+			Error_Handler();
+		}
+#endif
+
+		timer_delay(FAST_TIMER, dwell_time_us);
+
+		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+		if (blue_button_status) {// If blue button is pressed
+			printf("Terminating sweep early as blue button pressed \r\n");
+			HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
+			sweep_status = false;
+			break;
+		}
+	}
+
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
+	printf("Sweep complete\r\n");
+
+#ifdef RAMP_DAC
+	/* Zero and stop the DAC */
+	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
+	//HAL_DAC_Stop(&hdac1, DAC_CHANNEL_1);
+#endif
+
+	return sweep_status;
+}
+
+/**
+  * @brief  Perform a MW sweep
+  * @param  Start frequency
+  * @param  Dwell time in us
+  * @param	Step size
+  * @param  Number of points
+  * @retval Success/failure or early termination
+  */
+
+//static function for dfgdfgdfg
 
 /* Function to check MW settling time
  * Toggles between two MW frequencies
