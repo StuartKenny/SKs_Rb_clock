@@ -105,6 +105,7 @@ extern void MW_frequency_toggle (const double f_one, const double f_two);
 extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 //extern static void start_pop();
 //extern static void stop_pop();
+extern void test_call(void);
 
 /* USER CODE END PFP */
 
@@ -245,6 +246,9 @@ int main(void)
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 //	printf("Blue button status: %u \r\n", pin_status);
 //	last_pin_status = pin_status;
+
+	test_call();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

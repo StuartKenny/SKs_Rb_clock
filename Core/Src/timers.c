@@ -54,7 +54,7 @@ static volatile bool pop_running = false;
 
 //Timers defined here but declared in main.h
 TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
-TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 100 kHz
+TIM_TypeDef * MW_TIMER = TIM3; // Clocked at 100 kHz
 
 /* Function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) uint32_t static start_timer(TIM_TypeDef * timer);
