@@ -62,9 +62,9 @@
 enum mw_states
 {
   MW_STOPPED = 0,
+  MW_FIXED_FREQ, //
   MW_STABILISING, //waiting for MW output to stabilise
-  MW_DWELL, //MW output valid
-  MW_FIXED_FREQ //
+  MW_DWELL //MW output valid
 };
 
 struct MW_struct
@@ -74,9 +74,10 @@ struct MW_struct
   uint32_t NINT;
   uint32_t NFRAC_start; //ramp starting value of fractional register
   uint32_t num_steps;
-  uint32_t step_size; //in multiples of 2.98Hz
+  uint32_t step_size; //in multiples of minimum step
   uint32_t stabilise_time;
   uint32_t dwell_time;
+  uint32_t current_point; //keeps track of which point
 };
 
 //MW_struct mw_sweep_settings
@@ -88,12 +89,15 @@ static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
 
 //The following timer constants are used to program a 16-bit register i.e. 65535 max
-//static const uint32_t MW_STABILISE_TIME_US = 10000; // 10ms for MW output to stabilise before signalling FPGA
-static const uint32_t MW_STABILISE_TIME_US = 1000; // 1ms for MW output to stabilise before signalling FPGA
+static const uint32_t MW_STABILISE_TIME_US = 10000; // 10ms for MW output to stabilise before signalling FPGA
+//static const uint32_t MW_STABILISE_TIME_US = 1000; // 1ms for MW output to stabilise before signalling FPGA
 //static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 30.5s ramp
 //static const uint32_t DWELL_TIME_US = 1000; // (1ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 4.8s ramp
 static const uint32_t DWELL_TIME_US = 1180; // (1.2ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 5.1s ramp
 //static const uint32_t DWELL_TIME_US = 12000; //
+static const uint32_t POP_CYCLE_TIME_US = 21204; //21.2ms (53011 x 400ns cycles)
+static const uint32_t MW_PROCESSING_TIME = 11270; //measured at 11.27ms
+
 
 static const double VCO_MAX_FREQ = 4100E6;
 //static const double VCO_MIN_FREQ = 2050E6;
@@ -137,11 +141,15 @@ __attribute__((section(".itcm"))) static void mute_mw_outputs();
 __attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
 __attribute__((section(".itcm"))) void set_frequency_hz(const double fo);
 __attribute__((section(".itcm"))) void run_sweep();
-__attribute__((section(".itcm"))) bool static calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t dwell_time_us, const double step_size_Hz);
+__attribute__((section(".itcm"))) static void print_mw_sweep_settings (void);
+__attribute__((section(".itcm"))) bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
+__attribute__((section(".itcm"))) const bool start_MW_sweep(void);
+__attribute__((section(".itcm"))) const bool MW_update(void);
 __attribute__((section(".itcm"))) void MW_frequency_toggle (const double f_one, const double f_two);
 __attribute__((section(".itcm"))) void set_SDO_output(const uint32_t GPO_setting);
 extern uint32_t start_timer(TIM_TypeDef * timer);
 extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern uint32_t check_timer(TIM_TypeDef *timer);
 extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 extern void Error_Handler(void);
 
@@ -310,7 +318,8 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
 
 	/* Sets output frequency to the hyperfine value */
 	set_frequency_hz(HYPERFINE);
-	printf("Single frequency output: %f Hz \r\n", HYPERFINE);
+	//printf("Single frequency output: %f Hz \r\n", HYPERFINE);
+	printf("Single frequency output: %.10g Hz \r\n", HYPERFINE);
 //	struct MW_struct *mw_sweep_settings = 0;  //create a structure to store the sweep settings
 	mw_sweep_settings.state = MW_FIXED_FREQ;
 	return SUCCESS;
@@ -531,62 +540,253 @@ void run_sweep() {
 }
 
 /**
-  * @brief  Start a MW sweep with steps and dwell time
+  * @brief  Calculate MW sweep parameters based on steps and dwell time
   * @param  Centre frequency in Hz
   * @param  Span in Hz
-  * @param  Dwell time in us
-  * @param	Step size
+  * @param  Overall sweep period in s
+  * @retval Success/failure or early termination
+  */
+//static bool calc_period_based_MW_sweep(const double centre_freq, const double span, const double period) {
+//
+//}
+
+void test_call(void) {
+	calc_defined_step_MW_sweep(HYPERFINE, 10000, 2, 1000); //10kHz sweep, 5 POP cycles per step, 1000 points
+}
+
+  static void print_mw_sweep_settings (void) {
+  	// Check that I've populated everything
+  	printf("state: %u \r\n", mw_sweep_settings.state);
+  	printf("k: %u \r\n", mw_sweep_settings.k);
+  	printf("NINT: %lu \r\n", mw_sweep_settings.NINT);
+  	printf("NFRAC_start: %lu \r\n", mw_sweep_settings.NFRAC_start);
+  	printf("num_steps: %lu \r\n", mw_sweep_settings.num_steps);
+  	printf("step_size: %lu \r\n", mw_sweep_settings.step_size);
+  	printf("stabilise_time: %lu us\r\n", mw_sweep_settings.stabilise_time);
+  	printf("dwell_time: %lu us\r\n", mw_sweep_settings.dwell_time);
+  	printf("current_point: %lu us\r\n", mw_sweep_settings.current_point);
+  }
+
+/**
+  * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
+  * @param  Centre frequency in Hz
+  * @param  Span in Hz
+  * @param  POP cycles per step
   * @param  Number of points
   * @retval Success/failure or early termination
   */
-//static bool start_MW_sweep(const double centre_freq, const double span, const uint32_t dwell_time_us, const double step_size, const uint32_t points) {
-//	return();
+bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req) {
+	printf("MW sweep will have %.4g GHz centre frequency with %.5g Hz span\r\n", centre_freq/1000000000, span);
+	printf("and %ld POP cycles per step\r\n", pop_cycles_per_step);
+
+	/* Calculate start frequency */
+	double start_freq = centre_freq - 0.5* span;
+
+	/* Calculate k */
+	uint8_t local_k = VCO_MAX_FREQ / start_freq;
+
+	if (local_k != 1) {
+		while (local_k > 62 || local_k % 2) {
+			local_k --;
+		}
+	}
+	mw_sweep_settings.k = local_k;
+
+	/* Extrapolate step size requested versus achievable  */
+	const double step_size_Hz = span / (num_points_req - 1);
+	printf("Requested %ld steps, therefore step size of %.3g Hz\r\n", num_points_req, step_size_Hz);
+	const double unit_step_size_Hz = REF_FREQ / (double) (local_k * (1 << 24)); //minimum step size possible
+	printf("Unit step size: %.3g Hz\r\n", unit_step_size_Hz);
+	mw_sweep_settings.step_size = (step_size_Hz / unit_step_size_Hz + 0.5);
+	if (!mw_sweep_settings.step_size) { //step_size must be a positive non-zero integer
+		mw_sweep_settings.step_size++;
+	}
+	const double achieved_step_size = (double) (mw_sweep_settings.step_size * unit_step_size_Hz);
+	printf("Step size achieved: %.3g Hz\r\n", achieved_step_size);
+	mw_sweep_settings.num_steps = span / achieved_step_size;
+	printf("Number of steps: %ld \r\n", mw_sweep_settings.num_steps);
+
+	/* Can avoid spurs if frequency requested can be encoded exactly  */
+	start_freq = ((long)(start_freq/unit_step_size_Hz)) * unit_step_size_Hz;
+
+	/* Calculate the N division ratio, extracting the fractional and integer parts */
+	const double N = ((start_freq * local_k) / REF_FREQ);
+	mw_sweep_settings.NINT = N;
+	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
+
+	/* Calculate dwell time at each MW frequency */
+	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
+	mw_sweep_settings.dwell_time = pop_cycles_per_step * POP_CYCLE_TIME_US;
+
+	/* Calculate the period of a sweep */
+	const double period_s = (double)(MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time) * (double)(mw_sweep_settings.num_steps)/1000000;
+	printf("Sweep period: %.3g s\r\n", period_s);
+
+	mw_sweep_settings.current_point = 0;
+
+	print_mw_sweep_settings();
+	return(true);
+}
+
+///**
+//  * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
+//  * @param  Centre frequency in Hz
+//  * @param  Span in Hz
+//  * @param  Sweep period in s
+//  * @retval Success/failure or early termination
+//  */
+//bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period) {
+//	//Dwell time must be a minimum of one POP cycle
+//	//Dwell time shall be a minimum of 50% of sweep time
+//	//Number of points shall be maximised within the available time
+//
+//	//uint32_t pop_cycles_per_step, const uint32_t num_points_req) {
+//	printf("MW sweep will have %.4g GHz centre frequency with %.5g Hz span\r\n", centre_freq/1000000000, span);
+//	printf("and period of %.3g s\r\n", sweep_period);
+//
+//	mw_sweep_settings.dwell_time = POP_CYCLE_TIME_US; //minimum possible value of dwell_time in us
+//	uint32_t step_time = MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time; //minimum possible value in us
+//	uint32_t steps_in_sweep = sweep_period * (double)(1000000 / step_time); //maximum possible number of steps in sweep
+//	printf("%u steps in sweep\r\n", steps_in_sweep);
+//
+//	/* Calculate start frequency */
+//	double start_freq = centre_freq - 0.5* span;
+//
+//	/* Calculate k */
+//	uint8_t local_k = VCO_MAX_FREQ / start_freq;
+//
+//	if (local_k != 1) {
+//		while (local_k > 62 || local_k % 2) {
+//			local_k --;
+//		}
+//	}
+//	mw_sweep_settings.k = local_k;
+//
+//	/* Extrapolate step size requested versus achievable  */
+//	const double step_size_Hz = span / (num_points_req - 1);
+//	printf("Requested %ld steps, therefore step size of %.3g Hz\r\n", num_points_req, step_size_Hz);
+//	const double unit_step_size_Hz = REF_FREQ / (double) (local_k * (1 << 24)); //minimum step size possible
+//	printf("Unit step size: %.3g Hz\r\n", unit_step_size_Hz);
+//	mw_sweep_settings.step_size = (step_size_Hz / unit_step_size_Hz + 0.5);
+//	if (!mw_sweep_settings.step_size) { //step_size must be a positive non-zero integer
+//		mw_sweep_settings.step_size++;
+//	}
+//	const double achieved_step_size = (double) (mw_sweep_settings.step_size * unit_step_size_Hz);
+//	printf("Step size achieved: %.3g Hz\r\n", achieved_step_size);
+//	mw_sweep_settings.num_steps = span / achieved_step_size;
+//	printf("Number of steps: %ld \r\n", mw_sweep_settings.num_steps);
+//
+//	/* Can avoid spurs if frequency requested can be encoded exactly  */
+//	start_freq = ((long)(start_freq/unit_step_size_Hz)) * unit_step_size_Hz;
+//
+//	/* Calculate the N division ratio, extracting the fractional and integer parts */
+//	const double N = ((start_freq * local_k) / REF_FREQ);
+//	mw_sweep_settings.NINT = N;
+//	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
+//
+//	/* Calculate dwell time at each MW frequency */
+//	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
+//	mw_sweep_settings.dwell_time = pop_cycles_per_step * POP_CYCLE_TIME_US;
+//
+//	/* Calculate the period of a sweep */
+//	const double period_s = (double)(MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time) * (double)(mw_sweep_settings.num_steps)/1000000;
+//	printf("Sweep period: %.3g s\r\n", period_s);
+//
+//	mw_sweep_settings.current_point = 0;
+//
+//	print_mw_sweep_settings();
+//	return(true);
 //}
 
 /**
-  * @brief  Start a MW sweep with defined period
-  * @param  Start frequency
-  * @param  Dwell time in us
-  * @param	Step size
-  * @param  Number of points
-  * @retval Success/failure or early termination
+  * @brief  Starts a MW sweep
+  * @retval Success/failure
   */
-//static bool start_MW_sweep(const double centre_freq, const uint32_t dwell_time_us, const double step_size, const uint32_t points) {
-//
-//}
-//
-//static bool start_MW_sweep(struct MW_struct *mw_sweep_settings) {
-//	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume MW lock, the LED will be disabled if lock fails.
-//
-//#ifdef RAMP_DAC
-//	/* Zero the DAC output */
-//	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
-//	double dac_val = 0;
-//#endif
-//
-//	/* Output used for triggering external scope */
-//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
-//#ifdef MW_VERBOSE
-//	printf("Setting trigger output low \r\n");
-//#endif
-//	mw_sweep_settings.k = VCO_MAX_FREQ / mw_sweep_settings.start_freq;
-//
-//		if (k != 1) {
-//			while (k > 62 || k % 2) {
-//				k = k - 1;
-//			}
-//		}
-//
-//		/* Calculate the N division ratio */
-//		const double N = ((start_freq * k) / REF_FREQ);
-//
-//		/* Extract the fractional and integer parts */
-//		const uint32_t NINT = N;
-//		const uint32_t NFRAC = ((N - NINT) * (1 << 24)) + 0.5;
-//
-//		HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
-//		set_frequency(NINT, NFRAC, k, MANUAL_MUTE); //
-//		mw_sweep_settings.state = MW_STABILISING;
+const bool start_MW_sweep(void) {
+	//uses settings from the mw_sweep_settings structure
+	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Assume MW lock, the LED will be disabled if lock fails.
+
+	#ifdef RAMP_DAC
+		/* Zero the DAC output */
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
+		double dac_val = 0;
+	#endif //RAMP_DAC
+
+	#ifdef MW_VERBOSE
+		printf("Setting trigger output low \r\n");
+	#endif //MW_VERBOSE
+
+	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
+	set_frequency(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k, MANUAL_MUTE); //program initial MW frequency
+	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
+	mw_sweep_settings.current_point = 0; //currently on at start of ramp i.e. point 0
+	/* Output used for triggering external scope */
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
+	start_timer(MW_TIMER); //reset MW_timer and start counting
+	return(true);
+}
+
+/**
+  * @brief  Checks MW status to see if a timer has elapsed and if frequency needs changing.
+  * @retval True if an action was taken
+  */
+const bool MW_update(void) {
+	uint8_t local_copy_of_MW_state = mw_sweep_settings.state; //hack to make switch statement behave
+	//switch (mw_sweep_settings.state)
+	bool action_taken = false;
+	switch (local_copy_of_MW_state)
+	{
+		case MW_STOPPED:
+		case MW_FIXED_FREQ:
+			break; //no action to take
+
+		case MW_STABILISING: //waiting for MW output to stabilise
+			if (check_timer(MW_TIMER) < MW_STABILISE_TIME_US) return(false); //Still waiting, no action taken
+			//Otherwise MW stabilisation timer has elapsed
+			stop_timer(MW_TIMER);
+			HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low as MW now stable
+			mw_sweep_settings.state = MW_DWELL;
+			start_timer(MW_TIMER); //Restart timer for DWELL time
+			action_taken = true;
+			break;
+
+		case MW_DWELL: //valid MW output waiting for end of dwell time
+			if (check_timer(MW_TIMER) < mw_sweep_settings.dwell_time) return(false); //Still waiting
+			//Otherwise dwell timer has elapsed
+			action_taken = true;
+			stop_timer(MW_TIMER);
+			HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); //toggles red LED
+			HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high as about to change frequency
+			mw_sweep_settings.state = MW_STABILISING;
+			if (mw_sweep_settings.current_point == mw_sweep_settings.num_steps) {
+				/* All steps completed, tidy up and restart next sweep */
+				HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
+				printf("Sweep complete\r\n");
+				start_MW_sweep(); //restart the MW sweep
+			} else {
+				/* next MW step */
+				mw_sweep_settings.current_point++; //increment point counter
+				//calculate the new MW frequency and program Hittite with new NFRAC
+				uint32_t local_NFRAC = mw_sweep_settings.NFRAC_start + mw_sweep_settings.step_size * mw_sweep_settings.current_point;
+				set_frequency(mw_sweep_settings.NINT, local_NFRAC, mw_sweep_settings.k, MANUAL_MUTE); //program new MW frequency
+				start_timer(MW_TIMER); //Restart timer for MW stabilisation time
+				#ifdef RAMP_DAC
+					dac_val = dac_val + (4096.0/mw_sweep_settings.num_steps);
+					if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
+						printf("Failure to program value to DAC \r\n");
+						Error_Handler();
+					}
+				#endif //RAMP_DAC
+			}
+			break;
+
+		default: // Other state
+	       printf("MW_update has detected illegal state: %u \r\n", mw_sweep_settings.state);
+	       printf("local version: %u \r\n", local_copy_of_MW_state);
+	}
+    return(action_taken);
+}
+
 //
 ////		struct MW_struct
 ////		{
@@ -595,9 +795,10 @@ void run_sweep() {
 ////		  uint32_t NINT;
 ////		  uint32_t NFRAC_start; //ramp starting value of fractional register
 ////		  uint32_t num_steps;
-////		  uint32_t step_size; //in multiples of 2.98Hz
+////		  uint32_t step_size; //in multiples of minimum step
 ////		  uint32_t stabilise_time;
 ////		  uint32_t dwell_time;
+////		  uint32_t current_point;
 ////		};
 //
 //
@@ -607,13 +808,7 @@ void run_sweep() {
 //		set_frequency_hz(fo);
 //		//printf("Point: %lu, ", i);
 //
-//#ifdef RAMP_DAC
-//		dac_val = dac_val + (4096.0/num_points);
-//		if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (uint32_t)dac_val) != HAL_OK){
-//			printf("Failure to program value to DAC \r\n");
-//			Error_Handler();
-//		}
-//#endif
+
 //
 //		timer_delay(MW_TIMER, dwell_time_us);
 //
@@ -638,101 +833,6 @@ void run_sweep() {
 //	return sweep_status;
 //}
 
-/**
-  * @brief  Calculate MW sweep parameters based on steps and dwell time
-  * @param  Centre frequency in Hz
-  * @param  Span in Hz
-  * @param  Overall sweep period in s
-  * @retval Success/failure or early termination
-  */
-//static bool calc_period_based_MW_sweep(const double centre_freq, const double span, const double period) {
-//
-//}
-
-void test_call(void) {
-	calc_defined_step_MW_sweep(HYPERFINE, 10000, DWELL_TIME_US, 3);
-}
-
-/**
-  * @brief  Calculate MW sweep parameters based on known step size and dwell time
-  * @param  Centre frequency in Hz
-  * @param  Span in Hz
-  * @param  Dwell time in us
-  * @param	Step size in Hz
-  * @param  Number of points
-  * @retval Success/failure or early termination
-  */
-static bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t dwell_time_us, const double step_size_Hz) {
-	const double start_freq = centre_freq - 0.5* span; //calculate start frequency
-
-	/* Calculate k */
-	uint8_t local_k = VCO_MAX_FREQ / start_freq;
-
-	if (local_k != 1) {
-		while (local_k > 62 || local_k % 2) {
-			local_k --;
-		}
-	}
-	mw_sweep_settings.k = local_k;
-
-	/* Calculate the N division ratio */
-	const double N = ((start_freq * local_k) / REF_FREQ);
-
-	/* Extract the fractional and integer parts */
-	mw_sweep_settings.NINT = N;
-	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
-
-	/* Calculate step size versus requested */
-	const double unit_step_size_Hz = REF_FREQ / (double) (local_k * (1 << 24));
-	printf("Step size requested: %.17g Hz\r\n", step_size_Hz);
-	printf("Unit step size: %.17g Hz\r\n", unit_step_size_Hz);
-	mw_sweep_settings.step_size = (step_size_Hz / unit_step_size_Hz + 0.5);
-	if (!mw_sweep_settings.step_size) { //step_size must be a positive (non-zero) integer
-		mw_sweep_settings.step_size++;
-	}
-	const double achieved_step_size = (double) (mw_sweep_settings.step_size * unit_step_size_Hz);
-	printf("Step size achieved: %.17g Hz\r\n", achieved_step_size);
-
-	mw_sweep_settings.num_steps = span / achieved_step_size;
-	printf("Number of steps: %ld \r\n", mw_sweep_settings.num_steps);
-
-	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
-	mw_sweep_settings.dwell_time = dwell_time_us;
-
-	// Check that I've populated everything
-	printf("state: %u \r\n", mw_sweep_settings.state);
-	printf("k: %u \r\n", mw_sweep_settings.k);
-	printf("NINT: %lu \r\n", mw_sweep_settings.NINT);
-	printf("NFRAC_start: %lu \r\n", mw_sweep_settings.NFRAC_start);
-	printf("num_steps: %lu \r\n", mw_sweep_settings.num_steps);
-	printf("step_size: %lu \r\n", mw_sweep_settings.step_size);
-	printf("stabilise_time: %lu \r\n", mw_sweep_settings.stabilise_time);
-	printf("dwell_time: %lu \r\n", mw_sweep_settings.dwell_time);
-
-	/* UPDATE THIS TO CALCULE TOTAL PERIOD */
-	const double period = (double) (mw_sweep_settings.step_size * unit_step_size_Hz);
-
-//	const double calculated_number_of_steps = span / (REF_FREQ / (double) (step_size << 24)))) / k;
-//	mw_sweep_settings.num_steps = ;
-//	const double span, const uint32_t dwell_time_us, const uint32_t step_size
-//	mw_sweep_settings.step_size = step_size; //in multiples of 2.98Hz
-	return(true);
-}
-
-/**
-  * @brief  Starts a MW sweep
-  * @param  Start frequency
-  * @param  Dwell time in us
-  * @param	Step size
-  * @param  Number of points
-  * @retval Success/failure
-  */
-//static const bool start_MW_sweep(void) {
-//	const uint32 PROCESS_TIME_US = 234;
-//	const uint32 SWEEP_TIME_US = PROCESS_TIME_US + MW_STABILISE_TIME_US + DWELL_TIME_US
-//	const double SWEEP_TIME_S;
-//
-//}
 
 /* Function to check MW settling time
  * Toggles between two MW frequencies
@@ -795,33 +895,3 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
 	read_data |= GPO_setting; //Select GPO output dependent on function input value
 	synth_writereg(read_data, GPO_REGISTER, 0x0, VERIFY); // Update the GPO register.
 }
-
-///* Calculates sweep time and returns value in seconds*/
-//float calculate_sweep_time(void) {
-//	const uint32 PROCESS_TIME_US = 234;
-//	const uint32 SWEEP_TIME_US = PROCESS_TIME_US + MW_STABILISE_TIME_US + DWELL_TIME_US
-//	const double SWEEP_TIME_S;
-//
-//}
-
-// struct MW_struct *mw_sweep_settings = 0;  //create a structure to store the sweep settings
-// mw_sweep_settings.state = MW_STOPPED;
-
-// enum mw_states
-// {
-//   MW_STOPPED = 0,
-//   MW_STABILISING, //waiting for MW output to stabilise
-//   MW_DWELL //MW output valid
-// };
-//
-// struct MW_struct
-// {
-//   uint8_t state;             /* current MW state */
-//   uint8_t k;
-//   uint32_t NINT;
-//   uint32_t NFRAC_start; //ramp starting value of fractional register
-//   uint32_t num_steps;
-//   uint32_t step_size; //in multiples of 2.98Hz
-//   uint32_t stabilise_time;
-//   uint32_t dwell_time;
-// };

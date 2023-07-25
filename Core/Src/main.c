@@ -106,6 +106,9 @@ extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 //extern static void start_pop();
 //extern static void stop_pop();
 extern void test_call(void);
+extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
+extern const bool start_MW_sweep(void);
+extern const bool MW_update(void);
 
 /* USER CODE END PFP */
 
@@ -173,15 +176,15 @@ int main(void)
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
 
-#ifdef SYNTH_ENABLE
-	if (init_synthesiser(MW_power) != SUCCESS) {
-		printf("Synthesiser initialisation failed!\r\n");
-		Error_Handler();
-	}
-#ifdef MW_VERBOSE
-	printf("LO2GAIN set at: 0x%x \r\n", MW_power);
-#endif	//MW_VERBOSE
-#endif //SYNTH_ENABLE
+	#ifdef SYNTH_ENABLE
+		if (init_synthesiser(MW_power) != SUCCESS) {
+			printf("Synthesiser initialisation failed!\r\n");
+			Error_Handler();
+		}
+		#ifdef MW_VERBOSE
+			printf("LO2GAIN set at: 0x%x \r\n", MW_power);
+		#endif	//MW_VERBOSE
+	#endif //SYNTH_ENABLE
 
 	/* Start a low power timer to flash an LED approximately every second */
 	if (HAL_LPTIM_Counter_Start_IT(&hlptim1, 1024) != HAL_OK) {
@@ -238,17 +241,21 @@ int main(void)
 	                Error_Handler();
 	}
 	printf("ADC interrupt callback enabled \r\n");
-#ifdef QUANTIFY_ADC_NOISE
-	adc_max = 0;
-	adc_min = 60000;
-#endif //QUANTIFY_ADC_NOISE
+	#ifdef QUANTIFY_ADC_NOISE
+		adc_max = 0;
+		adc_min = 60000;
+	#endif //QUANTIFY_ADC_NOISE
 
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 //	printf("Blue button status: %u \r\n", pin_status);
 //	last_pin_status = pin_status;
 
-	test_call();
+//	test_call();
+//	timer_delay(MW_TIMER, 7000);
+//	timer_delay(MW_TIMER, 50000);
 
+//	calc_defined_step_MW_sweep(3035736939, 10000, 2, 1000); //10kHz sweep, 5 POP cycles per step, 1000 points
+	calc_defined_step_MW_sweep(3035736939, 2000, 2, 1001); //10kHz sweep, 5 POP cycles per step, 1000 points
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -291,12 +298,13 @@ int main(void)
 					MW_power = 0;
 				}
 				set_MW_power(MW_power);
-#ifdef MW_VERBOSE
+			#ifdef MW_VERBOSE
 				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
-#endif //MW_VERBOSE
+			#endif //MW_VERBOSE
 			} else {
-					printf("Initiating sweep.\r\n");
-					mw_sweep_started = true;
+				printf("Initiating sweep.\r\n");
+				mw_sweep_started = true;
+				start_MW_sweep();
 			}
 			while(blue_button_status) {//remain here polling button until it is released
 				timer_delay(SLOW_TIMER, 100); //10ms delay
@@ -306,12 +314,13 @@ int main(void)
 
 		if (mw_sweep_started) {//won't execute until the first time the blue button is pressed
 			/* Run the frequency sweep */
-			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
-			run_sweep();
-			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
+//			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
+//			run_sweep();
+//			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
 			//printf("Sweep complete.\r\n");
-			printf("LO2GAIN: 0x%x \r\n", MW_power);
+			//printf("LO2GAIN: 0x%x \r\n", MW_power);
 		}
+		MW_update();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

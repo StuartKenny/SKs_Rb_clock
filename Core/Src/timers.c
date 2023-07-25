@@ -53,12 +53,15 @@ static volatile uint32_t pop_cycle_count = 0;
 static volatile bool pop_running = false;
 
 //Timers defined here but declared in main.h
-TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 10 kHz
-TIM_TypeDef * MW_TIMER = TIM3; // Clocked at 100 kHz
+//TIM1 is a 16-bit advanced control timer
+TIM_TypeDef * SLOW_TIMER = TIM1; // Clocked at 100 kHz
+//TIM3 is a 16-bit general purpose timer
+TIM_TypeDef * MW_TIMER = TIM3; // Clocked at 1 MHz
 
 /* Function prototypes -----------------------------------------------*/
-__attribute__((section(".itcm"))) uint32_t static start_timer(TIM_TypeDef * timer);
-__attribute__((section(".itcm"))) uint32_t static stop_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
+__attribute__((section(".itcm"))) uint32_t check_timer(TIM_TypeDef *timer);
 __attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 __attribute__((section(".itcm"))) void start_pop();
 __attribute__((section(".itcm"))) void stop_pop();
@@ -88,22 +91,32 @@ static void set_aom_atten(const struct AttenuatorSettings a) {
   * @brief  Starts a timer.
   * @retval uint32_t
   */
-uint32_t static start_timer(TIM_TypeDef * timer) {
+uint32_t start_timer(TIM_TypeDef * timer) {
 
 	timer->CR1 &= ~(TIM_CR1_CEN);
 	timer->EGR |= TIM_EGR_UG;  // Reset CNT and PSC
 	timer->CR1 |= TIM_CR1_CEN;
+	//printf("Started timer with returned CNT value: %ld \r\n", timer->CNT);
 	return timer->CNT;
-
 }
 
 /**
   * @brief  Stops a timer.
   * @retval uint32_t
   */
-uint32_t static stop_timer(TIM_TypeDef *timer) {
+uint32_t stop_timer(TIM_TypeDef *timer) {
 
 	timer->CR1 &= ~(TIM_CR1_CEN);
+	return timer->CNT;
+}
+
+/**
+  * @brief  Returns timer counter value
+  * @param  Timer
+  * @retval Counter value
+  */
+uint32_t check_timer(TIM_TypeDef *timer) {
+
 	return timer->CNT;
 }
 
@@ -113,8 +126,8 @@ uint32_t static stop_timer(TIM_TypeDef *timer) {
 void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
 
 	/* Note that we don't consider overflow.
-	 * FAST_TIMER will take approximately 650 ms to overflow.
-	 * SLOW_TIMER will take 6.5s */
+	 * MW_TIMER will take approximately 65 ms to overflow.
+	 * SLOW_TIMER will take 650ms */
 
 	uint32_t start = start_timer(timer);
 //	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
@@ -122,7 +135,8 @@ void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
 //	timer->CR1 |= TIM_CR1_CEN; // Enable the timer
 //	uint32_t start = timer->CNT; // Get the start value of the timer
 
-	while((timer->CNT - start) < delay_count){} // Loop until delay_us has expired
+//	while((timer->CNT - start) < delay_count){} // Loop until delay_us has expired
+	while(timer->CNT < delay_count){} // Loop until delay_us has expired
 
 	stop_timer(timer);
 //	timer->CR1 &= ~(TIM_CR1_CEN); // Disable the timer
