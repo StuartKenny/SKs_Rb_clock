@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file           : template.c
- * @brief          : Functionality x
+ * @brief          : Hittite HMC835 driver & MW sweep generation
  * @authors		   : Simon J. Bale with updates and modifications by Stuart Kenny
  ******************************************************************************
    * @attention
@@ -11,15 +11,6 @@
   *
   *
   ******************************************************************************
-  */
-
-/* Function prototypes -----------------------------------------------*/
-//__attribute__((section(".itcm"))) static uint32_t template_function(const uint32_t data, const bool verify);
-//extern void Error_Handler(void);
-
-/**
-  * @brief  Function x.
-  * @retval int
   */
 
 /* Includes ------------------------------------------------------------------*/
@@ -112,7 +103,7 @@ static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
  * None of these appear to work particularly well all require 9-10ms to stabilise afterwards.
  * If both are disabled then stabilising time is slightly improved */
 static const bool AUTO_MUTE = true; //0 is disabled, 1 is enabled
-static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled. Approx 9ms to re-stabilise MW output if enabled
+//static const bool MANUAL_MUTE = true; //0 is disabled, 1 is enabled. Approx 9ms to re-stabilise MW output if enabled
 
 /* MW sweep settings {req_start_freq, req_stop_freq, step_size}
  * Requested frequencies will potentially be tweaked into values that can be programmed into the HMC835
@@ -137,12 +128,14 @@ __attribute__((section(".itcm"))) uint32_t set_MW_power (const uint8_t mw_power)
 __attribute__((section(".itcm"))) uint32_t init_synthesiser(const uint8_t mw_power);
 //__attribute__((section(".itcm"))) static const bool poll_until_locked(uint32_t timeout);
 __attribute__((section(".itcm"))) static const bool lock_status(void);
-__attribute__((section(".itcm"))) static void mute_mw_outputs();
-__attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
+//__attribute__((section(".itcm"))) static void mute_mw_outputs();
+//__attribute__((section(".itcm"))) static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute);
 __attribute__((section(".itcm"))) void set_frequency_hz(const double fo);
+__attribute__((section(".itcm"))) static void set_freq_regs(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider);
 __attribute__((section(".itcm"))) void run_sweep();
 __attribute__((section(".itcm"))) static void print_mw_sweep_settings (void);
 __attribute__((section(".itcm"))) bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
+__attribute__((section(".itcm"))) bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period);
 __attribute__((section(".itcm"))) const bool start_MW_sweep(void);
 __attribute__((section(".itcm"))) const bool MW_update(void);
 __attribute__((section(".itcm"))) void MW_frequency_toggle (const double f_one, const double f_two);
@@ -362,14 +355,14 @@ static const bool lock_status(void) {
   * @param  None
   * @retval None
   */
-static void mute_mw_outputs() {
-	uint32_t read_data = 0x0;
-
-	/* Mute the outputs by setting k value to zero */
-	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
-	read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
-	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
-}
+//static void mute_mw_outputs() {
+//	uint32_t read_data = 0x0;
+//
+//	/* Mute the outputs by setting k value to zero */
+//	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
+//	read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
+//	synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
+//}
 
 /**
   * @brief  Program HMC835 microwave frequency registers
@@ -379,27 +372,50 @@ static void mute_mw_outputs() {
   * @param  Manually mute whilst changing frequency
   * @retval None
   */
-static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute) {
+//static void set_frequency(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider, bool mute) {
+//
+//	static uint32_t last_integer = -1, last_fraction = -1, last_vcodiv = -1;
+//
+//	uint32_t read_data = 0x0;
+//
+//	if (mute) {
+//		mute_mw_outputs();
+//	}
+//
+//	if (last_integer == -1 || (last_integer != integer)) {
+//		synth_writereg(integer, INTEGER_FREQUENCY_REGISTER, 0x0, VERIFY);   // Integer register.
+//		last_integer = integer;
+//	}
+//
+//	if (last_fraction == -1 || (last_fraction != fraction)) {
+//		synth_writereg(fraction, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  // Fractional register.
+//		last_fraction = fraction;
+//	}
+//
+//	if (last_vcodiv == -1 || (last_vcodiv != vco_divider) || mute) {
+//		read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
+//		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
+//		read_data |= vco_divider; // This will set k which will un-mute the outputs */
+//		synth_writereg(read_data, GAIN_DIVIDER_REGISTER, 0x0, VERIFY); // Update the VCO divide register.
+//		last_vcodiv = vco_divider;
+//	}
+//
+//}
+
+/**
+  * @brief  Program HMC835 microwave frequency registers
+  * @param  Integer frequency
+  * @param  Fractional frequency
+  * @param  VCO divider value
+  * @retval None
+  */
+static void set_freq_regs(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider) {
 
 	static uint32_t last_integer = -1, last_fraction = -1, last_vcodiv = -1;
 
 	uint32_t read_data = 0x0;
 
-	if (mute) {
-		mute_mw_outputs();
-	}
-
-	if (last_integer == -1 || (last_integer != integer)) {
-		synth_writereg(integer, INTEGER_FREQUENCY_REGISTER, 0x0, VERIFY);   // Integer register.
-		last_integer = integer;
-	}
-
-	if (last_fraction == -1 || (last_fraction != fraction)) {
-		synth_writereg(fraction, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  // Fractional register.
-		last_fraction = fraction;
-	}
-
-	if (last_vcodiv == -1 || (last_vcodiv != vco_divider) || mute) {
+	if (last_vcodiv == -1 || (last_vcodiv != vco_divider)) {
 		read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
 		read_data &= 0xFFFFFFC0; // Zero the first 6 LSBs (VCO division value - mute).
 		read_data |= vco_divider; // This will set k which will un-mute the outputs */
@@ -407,7 +423,19 @@ static void set_frequency(const uint32_t integer, const uint32_t fraction, const
 		last_vcodiv = vco_divider;
 	}
 
+	if (last_integer == -1 || (last_integer != integer)) {
+		synth_writereg(integer, INTEGER_FREQUENCY_REGISTER, 0x0, VERIFY);   // Integer register.
+		last_integer = integer;
+	}
+
+	//writing fractional register last as this triggers auto-calibration
+	if (last_fraction == -1 || (last_fraction != fraction)) {
+		synth_writereg(fraction, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  // Fractional register.
+		last_fraction = fraction;
+	}
+
 }
+
 
 /**
   * @brief  Translate a frequency into register values for programming to HMC835
@@ -457,7 +485,8 @@ void set_frequency_hz(const double fo) {
 #endif
 
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
-	set_frequency(NINT, NFRAC, k, MANUAL_MUTE); //Sets only the necessary Hittite registers
+	//set_frequency(NINT, NFRAC, k, MANUAL_MUTE); //Sets only the necessary Hittite registers
+	set_freq_regs(NINT, NFRAC, k); //Sets only the necessary Hittite registers
 
 	//MW stabilisation delay and check for lock
 	timer_delay(MW_TIMER, MW_STABILISE_TIME_US);
@@ -551,7 +580,8 @@ void run_sweep() {
 //}
 
 void test_call(void) {
-	calc_defined_step_MW_sweep(HYPERFINE, 10000, 2, 1000); //10kHz sweep, 5 POP cycles per step, 1000 points
+//	calc_defined_step_MW_sweep(HYPERFINE, 10000, 2, 1000); //10kHz sweep, 5 POP cycles per step, 1000 points
+	calc_fixed_time_MW_sweep(HYPERFINE, 10000, 50); //10kHz sweep, 50s
 }
 
   static void print_mw_sweep_settings (void) {
@@ -565,7 +595,7 @@ void test_call(void) {
   	printf("stabilise_time: %lu us\r\n", mw_sweep_settings.stabilise_time);
   	printf("dwell_time: %lu us\r\n", mw_sweep_settings.dwell_time);
   	printf("current_point: %lu us\r\n", mw_sweep_settings.current_point);
-  }
+}
 
 /**
   * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
@@ -628,75 +658,84 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
 	return(true);
 }
 
-///**
-//  * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
-//  * @param  Centre frequency in Hz
-//  * @param  Span in Hz
-//  * @param  Sweep period in s
-//  * @retval Success/failure or early termination
-//  */
-//bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period) {
-//	//Dwell time must be a minimum of one POP cycle
-//	//Dwell time shall be a minimum of 50% of sweep time
-//	//Number of points shall be maximised within the available time
-//
-//	//uint32_t pop_cycles_per_step, const uint32_t num_points_req) {
-//	printf("MW sweep will have %.4g GHz centre frequency with %.5g Hz span\r\n", centre_freq/1000000000, span);
-//	printf("and period of %.3g s\r\n", sweep_period);
-//
-//	mw_sweep_settings.dwell_time = POP_CYCLE_TIME_US; //minimum possible value of dwell_time in us
-//	uint32_t step_time = MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time; //minimum possible value in us
-//	uint32_t steps_in_sweep = sweep_period * (double)(1000000 / step_time); //maximum possible number of steps in sweep
-//	printf("%u steps in sweep\r\n", steps_in_sweep);
-//
-//	/* Calculate start frequency */
-//	double start_freq = centre_freq - 0.5* span;
-//
-//	/* Calculate k */
-//	uint8_t local_k = VCO_MAX_FREQ / start_freq;
-//
-//	if (local_k != 1) {
-//		while (local_k > 62 || local_k % 2) {
-//			local_k --;
-//		}
-//	}
-//	mw_sweep_settings.k = local_k;
-//
-//	/* Extrapolate step size requested versus achievable  */
-//	const double step_size_Hz = span / (num_points_req - 1);
-//	printf("Requested %ld steps, therefore step size of %.3g Hz\r\n", num_points_req, step_size_Hz);
-//	const double unit_step_size_Hz = REF_FREQ / (double) (local_k * (1 << 24)); //minimum step size possible
-//	printf("Unit step size: %.3g Hz\r\n", unit_step_size_Hz);
-//	mw_sweep_settings.step_size = (step_size_Hz / unit_step_size_Hz + 0.5);
-//	if (!mw_sweep_settings.step_size) { //step_size must be a positive non-zero integer
-//		mw_sweep_settings.step_size++;
-//	}
-//	const double achieved_step_size = (double) (mw_sweep_settings.step_size * unit_step_size_Hz);
-//	printf("Step size achieved: %.3g Hz\r\n", achieved_step_size);
-//	mw_sweep_settings.num_steps = span / achieved_step_size;
-//	printf("Number of steps: %ld \r\n", mw_sweep_settings.num_steps);
-//
-//	/* Can avoid spurs if frequency requested can be encoded exactly  */
-//	start_freq = ((long)(start_freq/unit_step_size_Hz)) * unit_step_size_Hz;
-//
-//	/* Calculate the N division ratio, extracting the fractional and integer parts */
-//	const double N = ((start_freq * local_k) / REF_FREQ);
-//	mw_sweep_settings.NINT = N;
-//	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
-//
+/**
+  * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
+  * @param  Centre frequency in Hz
+  * @param  Span in Hz
+  * @param  Sweep period in s
+  * @retval Success/failure or early termination
+  */
+bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period) {
+	//Dwell time must be a minimum of one POP cycle
+	//Dwell time should be at least 50% of sweep time
+	//Number of points shall be maximised within the available time
+
+	//uint32_t pop_cycles_per_step, const uint32_t num_points_req) {
+	printf("MW sweep will have %.4g GHz centre frequency with %.5g Hz span\r\n", centre_freq/1000000000, span);
+	printf("and period of %.3g s\r\n", sweep_period);
+
+	mw_sweep_settings.dwell_time = POP_CYCLE_TIME_US; //minimum possible value of dwell_time in us
+	uint32_t step_time = MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time; //minimum possible value in us
+	uint32_t steps_in_sweep = sweep_period * (double)(1000000 / step_time); //maximum possible number of steps in sweep, rounded down to an integer
+	printf("%lu steps in sweep, maximum\r\n", steps_in_sweep);
+
+	/* now figure out the unit_step_size and how many steps will be taken in the span */
+
+	/* Calculate start frequency */
+	double start_freq = centre_freq - 0.5* span;
+
+	/* Calculate k */
+	uint8_t local_k = VCO_MAX_FREQ / start_freq;
+
+	if (local_k != 1) {
+		while (local_k > 62 || local_k % 2) {
+			local_k --;
+		}
+	}
+	mw_sweep_settings.k = local_k;
+
+	/* Extrapolate step size requested versus achievable  */
+	//const double step_size_Hz = span / (num_points_req - 1);
+	//printf("Requested %ld steps, therefore step size of %.3g Hz\r\n", num_points_req, step_size_Hz);
+	const double unit_step_size_Hz = REF_FREQ / (double) (local_k * (1 << 24)); //minimum step size possible
+	printf("Unit step size: %.3g Hz\r\n", unit_step_size_Hz);
+
+	//steps should be evenly sized
+	//selected step size should be an integer multiple of the unit step size
+	//increase the step_size value until the sweep fits into the available period
+	mw_sweep_settings.step_size = 1;
+	while ((mw_sweep_settings.step_size * steps_in_sweep) < (span / unit_step_size_Hz)) {
+		mw_sweep_settings.step_size++;
+	}
+	const double achieved_step_size = (double) (mw_sweep_settings.step_size * unit_step_size_Hz);
+	printf("selected step size: %lu x unit step i.e. %.3g Hz\r\n", mw_sweep_settings.step_size, achieved_step_size);
+
+	//calculate number of steps in sweep and round off to integer
+	mw_sweep_settings.num_steps = (span / achieved_step_size) + 0.5;
+	printf("selected %lu steps in sweep\r\n", steps_in_sweep);
+	mw_sweep_settings.num_steps = steps_in_sweep;
+
+	/* Can avoid spurs if frequency requested can be encoded exactly  */
+	start_freq = ((long)(start_freq/unit_step_size_Hz)) * unit_step_size_Hz;
+
+	/* Calculate the N division ratio, extracting the fractional and integer parts */
+	const double N = ((start_freq * local_k) / REF_FREQ);
+	mw_sweep_settings.NINT = N;
+	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
+
 //	/* Calculate dwell time at each MW frequency */
 //	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
 //	mw_sweep_settings.dwell_time = pop_cycles_per_step * POP_CYCLE_TIME_US;
-//
-//	/* Calculate the period of a sweep */
-//	const double period_s = (double)(MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time) * (double)(mw_sweep_settings.num_steps)/1000000;
-//	printf("Sweep period: %.3g s\r\n", period_s);
-//
-//	mw_sweep_settings.current_point = 0;
-//
-//	print_mw_sweep_settings();
-//	return(true);
-//}
+
+	/* Calculate the period of a sweep */
+	const double period_s = (double)(MW_STABILISE_TIME_US + MW_PROCESSING_TIME + mw_sweep_settings.dwell_time) * (double)(mw_sweep_settings.num_steps)/1000000;
+	printf("Sweep period: %.3g s\r\n", period_s);
+
+	mw_sweep_settings.current_point = 0;
+
+	print_mw_sweep_settings();
+	return(true);
+}
 
 /**
   * @brief  Starts a MW sweep
@@ -717,7 +756,8 @@ const bool start_MW_sweep(void) {
 	#endif //MW_VERBOSE
 
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
-	set_frequency(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k, MANUAL_MUTE); //program initial MW frequency
+//	set_frequency(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k, MANUAL_MUTE); //program initial MW frequency
+	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k); //program initial MW frequency
 	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
 	mw_sweep_settings.current_point = 0; //currently on at start of ramp i.e. point 0
 	/* Output used for triggering external scope */
@@ -768,7 +808,8 @@ const bool MW_update(void) {
 				mw_sweep_settings.current_point++; //increment point counter
 				//calculate the new MW frequency and program Hittite with new NFRAC
 				uint32_t local_NFRAC = mw_sweep_settings.NFRAC_start + mw_sweep_settings.step_size * mw_sweep_settings.current_point;
-				set_frequency(mw_sweep_settings.NINT, local_NFRAC, mw_sweep_settings.k, MANUAL_MUTE); //program new MW frequency
+//				set_frequency(mw_sweep_settings.NINT, local_NFRAC, mw_sweep_settings.k, MANUAL_MUTE); //program new MW frequency
+				set_freq_regs(mw_sweep_settings.NINT, local_NFRAC, mw_sweep_settings.k); //program new MW frequency
 				start_timer(MW_TIMER); //Restart timer for MW stabilisation time
 				#ifdef RAMP_DAC
 					dac_val = dac_val + (4096.0/mw_sweep_settings.num_steps);
@@ -865,10 +906,12 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
 	const uint32_t N_two_FRAC = ((N_two - N_two_INT) * (1 << 24)) + 0.5;
 
 	while (1) {
-	set_frequency(N_one_INT, N_one_FRAC, k_one, MANUAL_MUTE); //Program necessary values for f_one
+//	set_frequency(N_one_INT, N_one_FRAC, k_one, MANUAL_MUTE); //Program necessary values for f_one
+	set_freq_regs(N_one_INT, N_one_FRAC, k_one); //Program necessary values for f_one
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
 	timer_delay(SLOW_TIMER, 1000); //100ms delay
-	set_frequency(N_two_INT, N_two_FRAC, k_two, MANUAL_MUTE); //Program necessary values for f_two
+//	set_frequency(N_two_INT, N_two_FRAC, k_two, MANUAL_MUTE); //Program necessary values for f_two
+	set_freq_regs(N_two_INT, N_two_FRAC, k_two); //Program necessary values for f_two
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 	timer_delay(SLOW_TIMER, 1000); //100ms delay
 	}
