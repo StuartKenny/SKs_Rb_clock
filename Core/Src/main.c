@@ -107,6 +107,7 @@ extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 //extern static void stop_pop();
 extern void test_call(void);
 extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
+extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period);
 extern const bool start_MW_sweep(void);
 extern const bool MW_update(void);
 
@@ -254,8 +255,15 @@ int main(void)
 //	timer_delay(MW_TIMER, 7000);
 //	timer_delay(MW_TIMER, 50000);
 
-//	calc_defined_step_MW_sweep(3035736939, 10000, 2, 1000); //10kHz sweep, 5 POP cycles per step, 1000 points
-	calc_defined_step_MW_sweep(3035736939, 2000, 2, 1001); //10kHz sweep, 5 POP cycles per step, 1000 points
+//	calc_defined_step_MW_sweep(3035736939, 10000, 2, 1000); //10kHz sweep, 2 POP cycles per step, 1000 points
+//	calc_defined_step_MW_sweep(3035736939, 2000, 2, 1001); //10kHz sweep, 2 POP cycles per step, 1001 points
+//	calc_fixed_time_MW_sweep(3035736939, 10000, 50); //10kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035736939, 5000, 50); //10kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035735539, 5000, 50); //10kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035735539, 1500, 20); //10kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035735539, 5000, 58); //5kHz sweep, 58s
+	calc_fixed_time_MW_sweep(3035735539, 1900, 22); //1.8kHz sweep, 21s
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
