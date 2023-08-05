@@ -70,7 +70,7 @@ static volatile bool mw_sweep_started = false;
 volatile bool blue_button_status; //blue button state. 1 when pressed
 //static bool last_pin_status; //previous blue button state
 
-static uint8_t MW_power = 0x1; // Initial MW power i.e. LO2GAIN
+static uint8_t MW_power = 0x2; // Initial MW power i.e. LO2GAIN
 //3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
@@ -107,7 +107,7 @@ extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 //extern static void stop_pop();
 extern void test_call(void);
 extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
-extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period);
+extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period, const bool scope_sync_time);
 extern const bool start_MW_sweep(void);
 extern const bool MW_update(void);
 
@@ -258,11 +258,17 @@ int main(void)
 //	calc_defined_step_MW_sweep(3035736939, 10000, 2, 1000); //10kHz sweep, 2 POP cycles per step, 1000 points
 //	calc_defined_step_MW_sweep(3035736939, 2000, 2, 1001); //10kHz sweep, 2 POP cycles per step, 1001 points
 //	calc_fixed_time_MW_sweep(3035736939, 10000, 50); //10kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035736939, 5000, 50); //10kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035735539, 5000, 50); //10kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035735539, 1500, 20); //10kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035736939, 5000, 50); //5kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035735539, 5000, 50); //re-centred 50kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(3035735539, 1500, 20); //1.5kHz sweep, 50s
 //	calc_fixed_time_MW_sweep(3035735539, 5000, 58); //5kHz sweep, 58s
-	calc_fixed_time_MW_sweep(3035735539, 1900, 22); //1.8kHz sweep, 21s
+//	calc_fixed_time_MW_sweep(3035735539, 1900, 22); //1.8kHz sweep, 22s
+//	calc_fixed_time_MW_sweep(3035735539, 1900, 5.7); //1.8kHz sweep, 22s - FIRST POP
+//	calc_fixed_time_MW_sweep(3035735122, 1900, 5.7); //1.8kHz sweep, 22s re-centred
+//	calc_fixed_time_MW_sweep(3035735122, 1500, 20, true); //1.5kHz sweep, 20s re-centred - TIMER OVERFLOW
+//	calc_fixed_time_MW_sweep(3035735122, 1500, 10, true); //1.5kHz sweep, 10s re-centred - TIMER OVERFLOW
+//	calc_defined_step_MW_sweep(3035735122, 1500, 1, 1001); //1.5kHz sweep, 1 POP cycle per step, 1001 points, 17.4s
+	calc_defined_step_MW_sweep(3035735122, 1000, 1, 1001); //1kHz sweep, 1 POP cycle per step, 1001 points, 11.5s
 
   /* USER CODE END 2 */
 

@@ -24,7 +24,7 @@
 //#include <math.h>
 
 /* Typedefs -----------------------------------------------------------*/
-#define ATTENUATOR_CODE //include code related to AOM attenuator (SBJK clock)
+//#define ATTENUATOR_CODE //include code related to AOM attenuator (SBJK clock)
 #ifdef ATTENUATOR_CODE
 struct AttenuatorSettings
 {

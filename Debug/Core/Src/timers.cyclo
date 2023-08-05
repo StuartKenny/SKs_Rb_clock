@@ -4,8 +4,7 @@
 ../Core/Src/timers.c:126:6:timer_delay	2
 ../Core/Src/timers.c:169:6:start_pop	3
 ../Core/Src/timers.c:146:6:stop_pop	3
-../Core/Src/timers.c:78:13:set_aom_atten	1
 ../Core/Src/timers.c:312:6:HAL_LPTIM_AutoReloadMatchCallback	1
-../Core/Src/timers.c:316:6:HAL_HRTIM_Compare2EventCallback	2
+../Core/Src/timers.c:316:6:HAL_HRTIM_Compare2EventCallback	1
 ../Core/Src/timers.c:329:6:HAL_HRTIM_Compare3EventCallback	3
 ../Core/Src/timers.c:369:6:HAL_HRTIM_RepetitionEventCallback	1
