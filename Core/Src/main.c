@@ -35,6 +35,8 @@
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
+#define NO_SCOPE_SYNC 0
+#define ADD_SCOPE_SYNC_TIME 1
 
 /* USER CODE END PD */
 
@@ -53,7 +55,9 @@ HRTIM_HandleTypeDef hhrtim;
 LPTIM_HandleTypeDef hlptim1;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim5;
 
 UART_HandleTypeDef huart3;
 
@@ -69,6 +73,8 @@ extern uint32_t _eitcm;
 static volatile bool mw_sweep_started = false;
 volatile bool blue_button_status; //blue button state. 1 when pressed
 //static bool last_pin_status; //previous blue button state
+volatile uint16_t sample_count=0; //counts number of times the sample line drives the ADC trigger high
+uint32_t POP_period_us=0; //length of POP cycle in us
 
 static uint8_t MW_power = 0x2; // Initial MW power i.e. LO2GAIN
 //3 is max, 0 is min, log scale with 2dB between points
@@ -93,6 +99,8 @@ static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_HRTIM_Init(void);
 static void MX_ADC3_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
 
 extern uint32_t set_MW_power (const uint8_t mw_power);
@@ -107,9 +115,12 @@ extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
 //extern static void stop_pop();
 extern void test_call(void);
 extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
-extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double sweep_period, const bool scope_sync_time);
-extern const bool start_MW_sweep(void);
+extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
 extern const bool MW_update(void);
+extern void start_POP_calibration(const bool cal_only);
+extern void start_continuous_MW_sweep(void);
+extern uint32_t measure_POP_cycle(void);
+//extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
 
 /* USER CODE END PFP */
 
@@ -173,6 +184,8 @@ int main(void)
   MX_HRTIM_Init();
   MX_ADC3_Init();
   MX_LWIP_Init();
+  MX_TIM2_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
@@ -183,7 +196,7 @@ int main(void)
 			Error_Handler();
 		}
 		#ifdef MW_VERBOSE
-			printf("LO2GAIN set at: 0x%x \r\n", MW_power);
+			printf("MW power setting (LO2GAIN): 0x%x \r\n", MW_power);
 		#endif	//MW_VERBOSE
 	#endif //SYNTH_ENABLE
 
@@ -204,11 +217,7 @@ int main(void)
 		Error_Handler();
 	}
 
-	/* Output used for triggering external scope */
-//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
-//	printf("Setting trigger output high \r\n");
-//	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
-//	printf("Setting trigger output low \r\n");
+	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
 
 	/* Spare SMA pin */
 //	SPARE_OUT_GPIO_Port, SPARE_OUT_Pin
@@ -216,45 +225,36 @@ int main(void)
 //	printf("Setting spare SMA output high \r\n");
 //	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_RESET); // Sets spare SMA output low
 
-	/* Laser tuning pin */
-//	LASER_TUNING_GPIO_Port, LASER_TUNING_Pin
-	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
-	printf("Requesting FPGA CW absorption \r\n");
-//	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
-
-	/* MW invalid */
-//	MW_INVALID_GPIO_Port, MW_INVALID_Pin
-//	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); // MW_invalid output high
-	printf("Setting MW invalid output low \r\n");
-	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); // MW_invalid output low
-
-	/* Fire up the ADC */
-	// external trigger, single conversion selected in ioc file
-	// calibrate ADC for better accuracy and start it w/ interrupt
+	/* Fire up the ADC
+	 * external trigger, single conversion selected in ioc file
+	 * calibrate ADC for better accuracy and start it w/ interrupt
+	 */
 	if(HAL_ADCEx_Calibration_Start(&hadc3, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK){
 		printf("ADC calibration failure \r\n");
 		Error_Handler();
 	}
-	printf("ADC calibrated successfully \r\n");
 	//Start the ADC with interrupts enabled
 	if(HAL_ADC_Start_IT(&hadc3) != HAL_OK){
 		printf("Failed to start ADC with interrupt capability \r\n");
 	                Error_Handler();
 	}
-	printf("ADC interrupt callback enabled \r\n");
+	printf("ADC calibrated successfully and interrupt callback enabled \r\n");
 	#ifdef QUANTIFY_ADC_NOISE
 		adc_max = 0;
 		adc_min = 60000;
 	#endif //QUANTIFY_ADC_NOISE
 
-//	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
-//	printf("Blue button status: %u \r\n", pin_status);
-//	last_pin_status = pin_status;
+	/* Calculate the MW sweep settings
+	 * Notes:
+	 * Measure the period of a POP cycle *AFTER* the ADC has been initialised
+	 * Calculate sweep settings after first POP calibration routine
+	 */
+	start_POP_calibration(true);
+	while (!POP_period_us) {//loop here until period of POP cycle has been measured
+		MW_update();
+	}
 
-//	test_call();
-//	timer_delay(MW_TIMER, 7000);
-//	timer_delay(MW_TIMER, 50000);
-
+//	initiate_MW_calibration_sweep(POP_period);
 //	calc_defined_step_MW_sweep(3035736939, 10000, 2, 1000); //10kHz sweep, 2 POP cycles per step, 1000 points
 //	calc_defined_step_MW_sweep(3035736939, 2000, 2, 1001); //10kHz sweep, 2 POP cycles per step, 1001 points
 //	calc_fixed_time_MW_sweep(3035736939, 10000, 50); //10kHz sweep, 50s
@@ -265,10 +265,19 @@ int main(void)
 //	calc_fixed_time_MW_sweep(3035735539, 1900, 22); //1.8kHz sweep, 22s
 //	calc_fixed_time_MW_sweep(3035735539, 1900, 5.7); //1.8kHz sweep, 22s - FIRST POP
 //	calc_fixed_time_MW_sweep(3035735122, 1900, 5.7); //1.8kHz sweep, 22s re-centred
-//	calc_fixed_time_MW_sweep(3035735122, 1500, 20, true); //1.5kHz sweep, 20s re-centred - TIMER OVERFLOW
-//	calc_fixed_time_MW_sweep(3035735122, 1500, 10, true); //1.5kHz sweep, 10s re-centred - TIMER OVERFLOW
+//	calc_fixed_time_MW_sweep(3035735122, 1500, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred - TIMER OVERFLOW
+//	calc_fixed_time_MW_sweep(3035735122, 1500, 10, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 10s re-centred - TIMER OVERFLOW
 //	calc_defined_step_MW_sweep(3035735122, 1500, 1, 1001); //1.5kHz sweep, 1 POP cycle per step, 1001 points, 17.4s
-	calc_defined_step_MW_sweep(3035735122, 1000, 1, 1001); //1kHz sweep, 1 POP cycle per step, 1001 points, 11.5s
+//	calc_defined_step_MW_sweep(3035735122, 1000, 1, 1001); //1kHz sweep, 1 POP cycle per step, 1001 points, 11.5s
+	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
+//	calc_defined_step_MW_sweep(3035735122, 1000, 1, 500, POP_period); //1kHz sweep, 1 POP cycles per step, 500 points
+
+//	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
+//	printf("Blue button status: %u \r\n", pin_status);
+//	last_pin_status = pin_status;
+
+//	timer_delay(MW_TIMER, 7000);
+//	timer_delay(MW_TIMER, 50000);
 
   /* USER CODE END 2 */
 
@@ -295,7 +304,6 @@ int main(void)
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
-			printf("Requesting FPGA POP \r\n");
 			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
 
 			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
@@ -318,7 +326,7 @@ int main(void)
 			} else {
 				printf("Initiating sweep.\r\n");
 				mw_sweep_started = true;
-				start_MW_sweep();
+				start_continuous_MW_sweep();
 			}
 			while(blue_button_status) {//remain here polling button until it is released
 				timer_delay(SLOW_TIMER, 100); //10ms delay
@@ -762,6 +770,51 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 124;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -803,6 +856,51 @@ static void MX_TIM3_Init(void)
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 124;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 4294967295;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
 
 }
 
@@ -987,6 +1085,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   adc_val = HAL_ADC_GetValue(&hadc3);
   //printf("ADC value: %lu \r\n", adc_val);
   dac_val = adc_val >> 4;
+  sample_count++;
 #ifdef QUANTIFY_ADC_NOISE
   if (adc_val < adc_min) {
 	  adc_min = adc_val;

@@ -118,8 +118,10 @@ void Error_Handler(void);
 #define LD2_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
-extern TIM_TypeDef * MW_TIMER; // Clocked at 100 kHz
-extern TIM_TypeDef * SLOW_TIMER; // Clocked at 10 kHz
+extern TIM_TypeDef * FAST_TIMER;
+extern TIM_TypeDef * SLOW_TIMER;
+extern TIM_TypeDef * MW_TIMER;
+extern TIM_TypeDef * SWEEP_TIMER;
 
 /* USER CODE END Private defines */
 
