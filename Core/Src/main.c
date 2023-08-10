@@ -36,7 +36,7 @@
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
 #define NO_SCOPE_SYNC 0
-#define ADD_SCOPE_SYNC_TIME 1
+#define ADD_SCOPE_SYNC_TIME 0
 
 /* USER CODE END PD */
 
@@ -269,8 +269,8 @@ int main(void)
 //	calc_fixed_time_MW_sweep(3035735122, 1500, 10, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 10s re-centred - TIMER OVERFLOW
 //	calc_defined_step_MW_sweep(3035735122, 1500, 1, 1001); //1.5kHz sweep, 1 POP cycle per step, 1001 points, 17.4s
 //	calc_defined_step_MW_sweep(3035735122, 1000, 1, 1001); //1kHz sweep, 1 POP cycle per step, 1001 points, 11.5s
-	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
-//	calc_defined_step_MW_sweep(3035735122, 1000, 1, 500, POP_period); //1kHz sweep, 1 POP cycles per step, 500 points
+//	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
+	calc_fixed_time_MW_sweep(3035735122, 100, 5, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
 
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 //	printf("Blue button status: %u \r\n", pin_status);
