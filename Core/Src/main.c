@@ -87,6 +87,10 @@ uint32_t adc_max, adc_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
 uint32_t dac_val; //for dac1 output channel 1
 
+const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
+//static const double MW_DELTA = -1817; //MW offset
+static const double MW_DELTA = 1000; //MW offset
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -270,7 +274,16 @@ int main(void)
 //	calc_defined_step_MW_sweep(3035735122, 1500, 1, 1001); //1.5kHz sweep, 1 POP cycle per step, 1001 points, 17.4s
 //	calc_defined_step_MW_sweep(3035735122, 1000, 1, 1001); //1kHz sweep, 1 POP cycle per step, 1001 points, 11.5s
 //	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
-	calc_fixed_time_MW_sweep(3035735122, 100, 5, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
+//	calc_fixed_time_MW_sweep(3035735122, 100, 5, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 1000, 5, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 5s
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 1000, 20, ADD_SCOPE_SYNC_TIME); //1kHz sweep, 20s
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10, 3600, ADD_SCOPE_SYNC_TIME); //10Hz sweep, 1hr
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 2000, 5, ADD_SCOPE_SYNC_TIME); //2kHz sweep, 5s
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 3500, 10, ADD_SCOPE_SYNC_TIME); //3.5kHz sweep, 5s
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 3500, 50, ADD_SCOPE_SYNC_TIME); //3.5kHz sweep, 20s
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 15000, 10, ADD_SCOPE_SYNC_TIME); //15kHz sweep, 100s
+	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10000, 50, ADD_SCOPE_SYNC_TIME); //10kHz sweep, 50s
+//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 1000, 20, ADD_SCOPE_SYNC_TIME); //1kHz sweep, 20s
 
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 //	printf("Blue button status: %u \r\n", pin_status);
@@ -307,6 +320,7 @@ int main(void)
 			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
 
 			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
+			//MW_frequency_toggle (3000000010, 3000010010); //infinite loop toggling between centre of DR dip and 100kHz left of dip
 			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
 			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
 			//set_MW_power(0x03); //set maximum MW power to improve contrast

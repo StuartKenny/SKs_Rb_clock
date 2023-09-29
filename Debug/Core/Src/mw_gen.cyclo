@@ -14,4 +14,4 @@
 ../Core/Src/mw_gen.c:871:6:start_continuous_MW_sweep	1
 ../Core/Src/mw_gen.c:880:12:MW_update	13
 ../Core/Src/mw_gen.c:1086:6:MW_frequency_toggle	7
-../Core/Src/mw_gen.c:1130:7:set_SDO_output	2
+../Core/Src/mw_gen.c:1132:7:set_SDO_output	2

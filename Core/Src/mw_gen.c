@@ -124,7 +124,7 @@ static const double REF_FREQ = 50E6;
 //static const uint8_t LO2GAIN = 0x3; // 3 is max, 0 is min, log scale with 2dB between points
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
-static const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
+extern const double HYPERFINE; //Rb85 hyperfine frequency declared in main.c
 
 /* Mute MW generation whilst changing frequency
  * None of these appear to work particularly well all require 9-10ms to stabilise afterwards.
@@ -731,8 +731,8 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
 	mw_sweep_settings.num_steps = (span / achieved_step_size);
 
 	const uint32_t point_time_us = 1000000 * requested_sweep_period / (mw_sweep_settings.num_steps + 1); //period of each point in us
-	printf("DEBUG point_time_us: %lu \r\n", point_time_us);
-	printf("DEBUG sweep time in us: %lu \r\n", point_time_us * (mw_sweep_settings.num_steps + 1));
+//	printf("DEBUG point_time_us: %lu \r\n", point_time_us);
+//	printf("DEBUG sweep time in us: %lu \r\n", point_time_us * (mw_sweep_settings.num_steps + 1));
 	mw_sweep_settings.pop_cycles_per_point = (point_time_us - MW_STABILISE_TIME_US - TIMING_MARGIN_US - MW_PROCESSING_TIME_US)/POP_period_us;
 	printf("%lu points in sweep, %lu ms and %lu POP cycles each\r\n", mw_sweep_settings.num_steps + 1, point_time_us / 1000, mw_sweep_settings.pop_cycles_per_point);
 	uint32_t min_dwell_required_us = mw_sweep_settings.pop_cycles_per_point * POP_period_us + TIMING_MARGIN_US; //minimum dwell_time to achieve above
@@ -740,8 +740,8 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
 	if (mw_sweep_settings.dwell_time < min_dwell_required_us) {
 		mw_sweep_settings.dwell_time = min_dwell_required_us;
 	}
-	printf("DEBUG dwell_time: %lu \r\n", mw_sweep_settings.dwell_time);
-	printf("DEBUG sweep time in us: %lu \r\n", (mw_sweep_settings.dwell_time + MW_STABILISE_TIME_US + MW_PROCESSING_TIME_US) * (mw_sweep_settings.num_steps + 1));
+//	printf("DEBUG dwell_time: %lu \r\n", mw_sweep_settings.dwell_time);
+//	printf("DEBUG sweep time in us: %lu \r\n", (mw_sweep_settings.dwell_time + MW_STABILISE_TIME_US + MW_PROCESSING_TIME_US) * (mw_sweep_settings.num_steps + 1));
 
 	/* Double check - calculate the period of a sweep */
 	double point_period = (double)(MW_STABILISE_TIME_US + MW_PROCESSING_TIME_US + mw_sweep_settings.dwell_time)/1000000;
@@ -955,12 +955,12 @@ const bool MW_update(void) {
 			}
 			break;
 
-		case MW_CALIBRATE: //Measures the elapsed time taken for 20 POP cycles
-			if (sample_count >= 20) {//20 or more POP cycles have elapsed
+		case MW_CALIBRATE: //Measures the elapsed time taken for 101 samples (100 POP cycles)
+			if (sample_count >= 101) {//101 or more POP cycles have elapsed
 				uint32_t total_POP_cal_period = check_timer(MW_TIMER);
-				POP_period_us = (float)(total_POP_cal_period) / 20 + 0.5;
+				POP_period_us = (float)(total_POP_cal_period) / 100 + 0.5;
 				stop_timer(MW_TIMER);
-				printf("POP period, averaged over 20 cycles: %lu us\r\n", POP_period_us);
+				printf("POP period, averaged over 100 cycles: %lu us\r\n", POP_period_us);
 				action_taken = true;
 				if (mw_sweep_settings.sweep_mode == POP_CAL_ONLY) {//have reached the end of calibration and should stop
 					mw_sweep_settings.state = MW_STOPPED;
@@ -1085,7 +1085,7 @@ const bool MW_update(void) {
  */
 void MW_frequency_toggle (const double f_one, const double f_two) {
 	printf("MW frequency toggling experiment\r\n");
-	printf("Toggling between %.9g and %.9g GHz\r\n", f_one/1000000000, f_two/1000000000);
+	printf("Toggling between %.10g and %.10g GHz\r\n", f_one/1000000000, f_two/1000000000);
 
 	/* For the k divider we need to find the smallest even integer or use a max of 62*/
 	uint32_t k_one = VCO_MAX_FREQ / f_one;
@@ -1114,11 +1114,13 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
 //	set_frequency(N_one_INT, N_one_FRAC, k_one, MANUAL_MUTE); //Program necessary values for f_one
 	set_freq_regs(N_one_INT, N_one_FRAC, k_one); //Program necessary values for f_one
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
-	timer_delay(SLOW_TIMER, 1000); //100ms delay
+	//timer_delay(SLOW_TIMER, 1000); //100ms delay
+	timer_delay(SLOW_TIMER, 100); //10ms delay
 //	set_frequency(N_two_INT, N_two_FRAC, k_two, MANUAL_MUTE); //Program necessary values for f_two
 	set_freq_regs(N_two_INT, N_two_FRAC, k_two); //Program necessary values for f_two
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
-	timer_delay(SLOW_TIMER, 1000); //100ms delay
+	//timer_delay(SLOW_TIMER, 1000); //100ms delay
+	timer_delay(SLOW_TIMER, 100); //10ms delay
 	}
 }
 
