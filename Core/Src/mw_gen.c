@@ -696,7 +696,7 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
   */
 bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time) {
 	//Dwell time must be a minimum of one POP cycle
-	//Dwell time should be at least 50% of sweep time
+	//Overall dwell time should be at least 50% of sweep time
 	//Number of points shall be maximised within the available time
 
 	printf("MW sweep will have %.10g GHz centre frequency with %.5g Hz span, over %.3g s\r\n", centre_freq/1000000000, span, requested_sweep_period);
@@ -750,7 +750,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
 //	printf("calc_sweep_time %f\r\n", calc_sweep_time);
 	double min_sweep_time = (double)((min_dwell_required_us + MW_STABILISE_TIME_US + MW_PROCESSING_TIME_US) * (mw_sweep_settings.num_steps + 1)) / 1000000;
 	if (calc_sweep_time/min_sweep_time > 1.02) {
-		printf("Sweep period %.4g s but could be reduced to %.4g s with same number of POP samples\r\n", calc_sweep_time, min_sweep_time);
+		printf("Sweep period %.4g s but could be reduced to %.4g s\r\n", calc_sweep_time, min_sweep_time);
 	} else {
 		printf("Sweep period %.4g s is pretty much optimal for %lu POP samples per point\r\n", calc_sweep_time, mw_sweep_settings.pop_cycles_per_point);
 	}
@@ -910,33 +910,36 @@ const bool MW_update(void) {
 				HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 				sweep_period_us=check_timer(SWEEP_TIMER);
 				stop_timer(SWEEP_TIMER);
-				printf("Sweep complete in %.4g s. Expected %.4g s\r\n", (double)(sweep_period_us)/1000000, mw_sweep_settings.sweep_period);
-
+				printf("Sweep complete in %.4g s. Expected %.4g s. %u samples\r\n", (double)(sweep_period_us)/1000000, mw_sweep_settings.sweep_period, sample_count);
 				/* Check if the ADC registered the correct number of samples */
 				uint16_t expected_samples = mw_sweep_settings.pop_cycles_per_point * (mw_sweep_settings.num_steps + 1);
-				/* Actually seeing 1344 samples versus the 1008 which should be generated!
-				 * That's high by 336 which is the number of steps in a 20s sweep
-				 */
-
-//				printf("Sweep generated %u samples and %u registered\r\n", expected_samples, sample_count);
-				if (sample_count != expected_samples) {
+				uint16_t possible_samples = expected_samples + mw_sweep_settings.num_steps + 1;
+//				printf("Sweep generated %u full POP cycles and registered %u samples\r\n", expected_samples, sample_count);
+				if ((sample_count == expected_samples) || (sample_count == possible_samples)) {
+					#ifdef MW_VERBOSE
+					printf("Sweep generated and successfully registered %u samples\r\n", sample_count);
+					#endif //MW_VERBOSE
+				} else {
 					printf("Warning - sweep generated %u samples but %u registered\r\n", expected_samples, sample_count);
+					printf("Timing of last sample is marginal\r\n");
 				}
+				#ifdef MW_VERBOSE
 				/* calculate measured time per point */
 				printf("%lu points\r\n", mw_sweep_settings.num_steps + 1);
 				uint32_t measured_time_per_point_us = (double)(sweep_period_us)/(mw_sweep_settings.num_steps+1);
 				printf("measured_time_per_point, %lu us\r\n", measured_time_per_point_us);
 //				calculated processing time
-				uint32_t measured_processing_time_us = (measured_time_per_point_us - TIMING_MARGIN_US - MW_STABILISE_TIME_US - mw_sweep_settings.dwell_time);
-				printf("MW processing time: %lu us\r\n", measured_processing_time_us);
-				if ((double)(measured_processing_time_us)/MW_PROCESSING_TIME_US > 1.1) {
-					printf("Warning - measured MW processing time (%lu us)is larger than the %lu us expected\r\n", measured_processing_time_us, MW_PROCESSING_TIME_US);
-				}
+//				uint32_t measured_processing_time_us = (measured_time_per_point_us - TIMING_MARGIN_US - MW_STABILISE_TIME_US - mw_sweep_settings.dwell_time);
+//				printf("MW processing time: %lu us\r\n", measured_processing_time_us);
+//				if ((double)(measured_processing_time_us)/MW_PROCESSING_TIME_US > 1.1) {
+//					printf("Warning - measured MW processing time (%lu us)is larger than the %lu us expected\r\n", measured_processing_time_us, MW_PROCESSING_TIME_US);
+//				}
+				#endif //MW_VERBOSE
 				if (mw_sweep_settings.sweep_mode == SWEEP_ONCE) {//have reached the end of a single sweep and should stop
 					mw_sweep_settings.state = MW_STOPPED;
 				} else {
-//					start_MW_sweep(); //restart the next MW sweep
-					start_POP_calibration(false); //check the POP period and restart the next MW sweep without updating mw_sweep_settings.sweep_mode
+					start_MW_sweep(false); //restart the next MW sweep without updating mw_sweep_settings.sweep_mode
+//					start_POP_calibration(false); //check the POP period and restart the next MW sweep without updating mw_sweep_settings.sweep_mode
 				}
 			} else {
 				/* next MW step */
@@ -956,7 +959,7 @@ const bool MW_update(void) {
 			break;
 
 		case MW_CALIBRATE: //Measures the elapsed time taken for 101 samples (100 POP cycles)
-			if (sample_count >= 101) {//101 or more POP cycles have elapsed
+			if (sample_count >= 100) {//100 or more POP cycles have elapsed
 				uint32_t total_POP_cal_period = check_timer(MW_TIMER);
 				POP_period_us = (float)(total_POP_cal_period) / 100 + 0.5;
 				stop_timer(MW_TIMER);
@@ -1111,15 +1114,11 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
 	const uint32_t N_two_FRAC = ((N_two - N_two_INT) * (1 << 24)) + 0.5;
 
 	while (1) {
-//	set_frequency(N_one_INT, N_one_FRAC, k_one, MANUAL_MUTE); //Program necessary values for f_one
 	set_freq_regs(N_one_INT, N_one_FRAC, k_one); //Program necessary values for f_one
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
-	//timer_delay(SLOW_TIMER, 1000); //100ms delay
 	timer_delay(SLOW_TIMER, 100); //10ms delay
-//	set_frequency(N_two_INT, N_two_FRAC, k_two, MANUAL_MUTE); //Program necessary values for f_two
 	set_freq_regs(N_two_INT, N_two_FRAC, k_two); //Program necessary values for f_two
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
-	//timer_delay(SLOW_TIMER, 1000); //100ms delay
 	timer_delay(SLOW_TIMER, 100); //10ms delay
 	}
 }

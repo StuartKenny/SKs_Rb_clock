@@ -253,37 +253,16 @@ int main(void)
 	 * Measure the period of a POP cycle *AFTER* the ADC has been initialised
 	 * Calculate sweep settings after first POP calibration routine
 	 */
-	start_POP_calibration(true);
-	while (!POP_period_us) {//loop here until period of POP cycle has been measured
-		MW_update();
-	}
+//	start_POP_calibration(true);
+//	while (!POP_period_us) {//loop here until period of POP cycle has been measured
+//		MW_update();
+//	}
 
 //	initiate_MW_calibration_sweep(POP_period);
-//	calc_defined_step_MW_sweep(3035736939, 10000, 2, 1000); //10kHz sweep, 2 POP cycles per step, 1000 points
-//	calc_defined_step_MW_sweep(3035736939, 2000, 2, 1001); //10kHz sweep, 2 POP cycles per step, 1001 points
-//	calc_fixed_time_MW_sweep(3035736939, 10000, 50); //10kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035736939, 5000, 50); //5kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035735539, 5000, 50); //re-centred 50kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035735539, 1500, 20); //1.5kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(3035735539, 5000, 58); //5kHz sweep, 58s
-//	calc_fixed_time_MW_sweep(3035735539, 1900, 22); //1.8kHz sweep, 22s
-//	calc_fixed_time_MW_sweep(3035735539, 1900, 5.7); //1.8kHz sweep, 22s - FIRST POP
-//	calc_fixed_time_MW_sweep(3035735122, 1900, 5.7); //1.8kHz sweep, 22s re-centred
-//	calc_fixed_time_MW_sweep(3035735122, 1500, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred - TIMER OVERFLOW
-//	calc_fixed_time_MW_sweep(3035735122, 1500, 10, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 10s re-centred - TIMER OVERFLOW
-//	calc_defined_step_MW_sweep(3035735122, 1500, 1, 1001); //1.5kHz sweep, 1 POP cycle per step, 1001 points, 17.4s
-//	calc_defined_step_MW_sweep(3035735122, 1000, 1, 1001); //1kHz sweep, 1 POP cycle per step, 1001 points, 11.5s
 //	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
-//	calc_fixed_time_MW_sweep(3035735122, 100, 5, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 1000, 5, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 5s
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 1000, 20, ADD_SCOPE_SYNC_TIME); //1kHz sweep, 20s
 //	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10, 3600, ADD_SCOPE_SYNC_TIME); //10Hz sweep, 1hr
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 2000, 5, ADD_SCOPE_SYNC_TIME); //2kHz sweep, 5s
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 3500, 10, ADD_SCOPE_SYNC_TIME); //3.5kHz sweep, 5s
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 3500, 50, ADD_SCOPE_SYNC_TIME); //3.5kHz sweep, 20s
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 15000, 10, ADD_SCOPE_SYNC_TIME); //15kHz sweep, 100s
 	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10000, 50, ADD_SCOPE_SYNC_TIME); //10kHz sweep, 50s
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 1000, 20, ADD_SCOPE_SYNC_TIME); //1kHz sweep, 20s
+
 
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 //	printf("Blue button status: %u \r\n", pin_status);
