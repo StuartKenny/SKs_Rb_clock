@@ -24,6 +24,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+extern struct netif gnetif;
 
 /* USER CODE END PTD */
 
@@ -31,7 +32,7 @@
 /* USER CODE BEGIN PD */
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-#define SYNTH_ENABLE
+//#define SYNTH_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
@@ -95,6 +96,8 @@ static const double MW_DELTA = 1000; //MW offset
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MPU_Initialize(void);
+static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_LPTIM1_Init(void);
 static void MX_DAC1_Init(void);
@@ -167,6 +170,9 @@ int main(void)
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
+  /* MPU Configuration--------------------------------------------------------*/
+  MPU_Config();
+
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -194,6 +200,9 @@ int main(void)
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
 
+	#ifndef SYNTH_ENABLE
+	printf("WARNING - MW Synthesiser is disabled\r\n");
+	#endif //SYNTH_ENABLE
 	#ifdef SYNTH_ENABLE
 		if (init_synthesiser(MW_power) != SUCCESS) {
 			printf("Synthesiser initialisation failed!\r\n");
@@ -336,6 +345,11 @@ int main(void)
 			//printf("LO2GAIN: 0x%x \r\n", MW_power);
 		}
 		MW_update();
+
+	    /* Ethernet handling */
+		ethernetif_input(&gnetif);
+		sys_check_timeouts();
+		printf("Ethernet loop.\r\n");
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -1096,6 +1110,58 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 }
 
 /* USER CODE END 4 */
+
+/* MPU Configuration */
+
+void MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+  /* Disables the MPU */
+  HAL_MPU_Disable();
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+  MPU_InitStruct.BaseAddress = 0x0;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4GB;
+  MPU_InitStruct.SubRegionDisable = 0x87;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+  MPU_InitStruct.BaseAddress = 0x30020000;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_128KB;
+  MPU_InitStruct.SubRegionDisable = 0x0;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+  MPU_InitStruct.BaseAddress = 0x30040000;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_512B;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+  /* Enables the MPU */
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
