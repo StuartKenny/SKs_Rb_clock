@@ -6,7 +6,7 @@
 "./Core/Src/syscalls.o"
 "./Core/Src/sysmem.o"
 "./Core/Src/system_stm32h7xx.o"
-"./Core/Src/telnet_client.o"
+"./Core/Src/tcp_client.o"
 "./Core/Src/template.o"
 "./Core/Src/timers.o"
 "./Core/Startup/startup_stm32h743zitx.o"

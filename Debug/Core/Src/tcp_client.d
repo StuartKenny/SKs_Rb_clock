@@ -1,5 +1,4 @@
-Core/Src/telnet_client.o: ../Core/Src/telnet_client.c \
- ../Core/Inc/telnet_client.h \
+Core/Src/tcp_client.o: ../Core/Src/tcp_client.c ../Core/Inc/tcp_client.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/tcp.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/opt.h \
  ../LWIP/Target/lwipopts.h ../Core/Inc/main.h \
@@ -70,7 +69,7 @@ Core/Src/telnet_client.o: ../Core/Src/telnet_client.c \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/prot/ip.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/icmp.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/prot/icmp.h
-../Core/Inc/telnet_client.h:
+../Core/Inc/tcp_client.h:
 ../Middlewares/Third_Party/LwIP/src/include/lwip/tcp.h:
 ../Middlewares/Third_Party/LwIP/src/include/lwip/opt.h:
 ../LWIP/Target/lwipopts.h:

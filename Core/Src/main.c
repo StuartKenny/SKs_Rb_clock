@@ -14,6 +14,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mw_gen.h"
+#include "tcp_client.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,7 +33,7 @@ extern struct netif gnetif;
 /* USER CODE BEGIN PD */
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-#define SYNTH_ENABLE
+//#define SYNTH_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
@@ -131,6 +132,11 @@ extern void start_POP_calibration(const bool cal_only);
 extern void start_continuous_MW_sweep(void);
 extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
+
+/* Telnet prototypes*/
+//extern void telnet_client_init(void);
+extern bool is_telnet_initialised(void);
+extern void one_off (void);
 
 /* USER CODE END PFP */
 
@@ -292,11 +298,25 @@ int main(void)
 //	timer_delay(MW_TIMER, 7000);
 //	timer_delay(MW_TIMER, 50000);
 
+	telnet_client_init(); //initialise telnet client
+	printf("Telnet client initialised\r\n");
+
+	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
+	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
+		//loop here until telnet is initialised or 15s has elapsed
+		printf("Waiting for telnet to initialise\r\n");
+		printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
+	}
+	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
+
+	printf("Sending test packets\r\n");
+	extern void one_off (void);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	printf("Entering main while loop.\r\n");
+	printf("Entering main while loop\r\n");
 	while (1) {
 		//POP can run in SLEEP mode
 		//
