@@ -32,7 +32,7 @@ extern struct netif gnetif;
 /* USER CODE BEGIN PD */
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-//#define SYNTH_ENABLE
+#define SYNTH_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
@@ -118,6 +118,9 @@ extern void MW_frequency_toggle (const double f_one, const double f_two);
 //extern uint32_t start_timer(TIM_TypeDef * timer);
 //extern uint32_t stop_timer(TIM_TypeDef * timer);
 extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
+extern uint32_t start_timer(TIM_TypeDef * timer);
+extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern uint32_t check_timer(TIM_TypeDef *timer);
 //extern static void start_pop();
 //extern static void stop_pop();
 extern void test_call(void);
@@ -262,10 +265,19 @@ int main(void)
 	 * Measure the period of a POP cycle *AFTER* the ADC has been initialised
 	 * Calculate sweep settings after first POP calibration routine
 	 */
-//	start_POP_calibration(true);
-//	while (!POP_period_us) {//loop here until period of POP cycle has been measured
-//		MW_update();
-//	}
+	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
+	start_POP_calibration(true);
+	//loop here until period of POP cycle has been measured or 3s has elapsed
+	//When correctly connected, POP cycle measurement should take 1.3s
+	while (!POP_period_us && (check_timer(SWEEP_TIMER) < 3000000)) {
+		MW_update();
+//		printf("POP_period_us %lu, SWEEP_TIMER value %lu \r\n", POP_period_us, check_timer(SWEEP_TIMER));
+	}
+//	printf("Finished loop - POP_period_us %lu, SWEEP_TIMER value %lu \r\n", POP_period_us, check_timer(SWEEP_TIMER));
+	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
+	if (!POP_period_us) {//if the calibration loop timed out
+		printf("WARNING - STM32 is not receiving a periodic sample from the FPGA \r\n");
+	}
 
 //	initiate_MW_calibration_sweep(POP_period);
 //	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
@@ -284,6 +296,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	printf("Entering main while loop.\r\n");
 	while (1) {
 		//POP can run in SLEEP mode
 		//
@@ -349,7 +362,7 @@ int main(void)
 	    /* Ethernet handling */
 		ethernetif_input(&gnetif);
 		sys_check_timeouts();
-		printf("Ethernet loop.\r\n");
+//		printf("Ethernet loop.\r\n");
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
