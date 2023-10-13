@@ -80,6 +80,7 @@ enum telnet_client_states
 extern TIM_HandleTypeDef htim1;
 
 /* Defines ------------------------------------------------------------*/
+#define TELNET_DEBUG
 
 /* Variables ---------------------------------------------------------*/
 bool telnet_initialised = 0;
@@ -166,7 +167,8 @@ void telnet_client_init(void)
 
 	/* 2. Connect to the server */
 	ip_addr_t destIPADDR;
-	IP_ADDR4(&destIPADDR, 192, 168, 1, 12);
+//	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
+	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Beginning TCP connection.\n\r");
 		printf("[Telnet Client] Connecting to 192.168.1.12 on port %d.\n\r", 8886);

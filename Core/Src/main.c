@@ -304,13 +304,14 @@ int main(void)
 	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
 	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
 		//loop here until telnet is initialised or 15s has elapsed
-		printf("Waiting for telnet to initialise\r\n");
-		printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
+//		printf("Waiting for telnet to initialise\r\n");
+//		printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
 	}
 	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
+	printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
 
-	printf("Sending test packets\r\n");
-	extern void one_off (void);
+//	printf("Sending test packets\r\n");
+//	one_off();
 
   /* USER CODE END 2 */
 
@@ -338,31 +339,33 @@ int main(void)
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
-			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
-
-			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
-			//MW_frequency_toggle (3000000010, 3000010010); //infinite loop toggling between centre of DR dip and 100kHz left of dip
-			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
-			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
-			//set_MW_power(0x03); //set maximum MW power to improve contrast
-			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
-			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
-
-			//change the MW power each time the button is pressed, unless it's the first time round this loop
-			if (mw_sweep_started) {
-				++MW_power; //increase MW_power value by 1
-				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
-					MW_power = 0;
-				}
-				set_MW_power(MW_power);
-			#ifdef MW_VERBOSE
-				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
-			#endif //MW_VERBOSE
-			} else {
-				printf("Initiating sweep.\r\n");
-				mw_sweep_started = true;
-				start_continuous_MW_sweep();
-			}
+			printf("Sending test packets\r\n");
+			one_off(); //send a few test characters to computer
+//			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
+//
+//			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
+//			//MW_frequency_toggle (3000000010, 3000010010); //infinite loop toggling between centre of DR dip and 100kHz left of dip
+//			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
+//			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
+//			//set_MW_power(0x03); //set maximum MW power to improve contrast
+//			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
+//			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
+//
+//			//change the MW power each time the button is pressed, unless it's the first time round this loop
+//			if (mw_sweep_started) {
+//				++MW_power; //increase MW_power value by 1
+//				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
+//					MW_power = 0;
+//				}
+//				set_MW_power(MW_power);
+//			#ifdef MW_VERBOSE
+//				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
+//			#endif //MW_VERBOSE
+//			} else {
+//				printf("Initiating sweep.\r\n");
+//				mw_sweep_started = true;
+//				start_continuous_MW_sweep();
+//			}
 			while(blue_button_status) {//remain here polling button until it is released
 				timer_delay(SLOW_TIMER, 100); //10ms delay
 				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
