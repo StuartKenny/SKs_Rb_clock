@@ -1,4 +1,4 @@
-Core/Src/tcp_client.o: ../Core/Src/tcp_client.c ../Core/Inc/tcp_client.h \
+Core/Src/ldc501.o: ../Core/Src/ldc501.c ../Core/Inc/ldc501.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/tcp.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/opt.h \
  ../LWIP/Target/lwipopts.h ../Core/Inc/main.h \
@@ -69,7 +69,7 @@ Core/Src/tcp_client.o: ../Core/Src/tcp_client.c ../Core/Inc/tcp_client.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/prot/ip.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/icmp.h \
  ../Middlewares/Third_Party/LwIP/src/include/lwip/prot/icmp.h
-../Core/Inc/tcp_client.h:
+../Core/Inc/ldc501.h:
 ../Middlewares/Third_Party/LwIP/src/include/lwip/tcp.h:
 ../Middlewares/Third_Party/LwIP/src/include/lwip/opt.h:
 ../LWIP/Target/lwipopts.h:

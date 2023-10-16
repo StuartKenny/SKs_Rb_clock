@@ -3,7 +3,7 @@
   ***************************************************************************************************************
   ***************************************************************************************************************
 
-  File:		  	   telnet_client.c
+  File:		  	   lad501.c
   Modified By:     ControllersTech.com & Stuart Kenny
   Updated:    	   Oct-2023
 
@@ -53,7 +53,7 @@
  **/
 
 /* Includes ------------------------------------------------------------------*/
-#include "tcp_client.h"
+#include <ldc501.h>
 #include "lwip/tcp.h"
 #include <stdbool.h>
 
@@ -81,6 +81,7 @@ extern TIM_HandleTypeDef htim1;
 
 /* Defines ------------------------------------------------------------*/
 #define TELNET_DEBUG
+#define LDC501PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
 
 /* Variables ---------------------------------------------------------*/
 bool telnet_initialised = 0;
@@ -111,7 +112,8 @@ __attribute__((section(".itcm"))) static void telnet_client_send(struct tcp_pcb 
 /* Function to close the connection */
 __attribute__((section(".itcm"))) static void telnet_client_connection_close(struct tcp_pcb *tpcb, struct telnet_client_struct *tc);
 /* This is the part where we are going to handle the incoming data from the server */
-__attribute__((section(".itcm"))) static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc);
+__attribute__((section(".itcm"))) static void example_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc);
+__attribute__((section(".itcm"))) static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc, struct pbuf *p);
 
 /**
   * @brief  Function x.
@@ -171,9 +173,9 @@ void telnet_client_init(void)
 	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Beginning TCP connection.\n\r");
-		printf("[Telnet Client] Connecting to 192.168.1.12 on port %d.\n\r", 8886);
+		printf("[Telnet Client] Connecting to 192.168.1.14 on port %d.\n\r", LDC501PORT);
 	#endif
-	tcp_connect(tpcb, &destIPADDR, 8886, telnet_client_connected);
+	tcp_connect(tpcb, &destIPADDR, LDC501PORT, telnet_client_connected);
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Called tcp_connect, awaiting callback.\n\r");
 	#endif
@@ -223,7 +225,8 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
     tcp_sent(newpcb, telnet_client_sent);
 
     /* handle the TCP data */
-    telnet_client_handle(newpcb, tc);
+//    example_client_handle(newpcb, tc);
+//    telnet_client_handle(newpcb, tc, p);
 
     #ifdef TELNET_DEBUG
 		printf("[Telnet Client] Successful connection.\n\r");
@@ -243,6 +246,17 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
     ret_err = ERR_MEM;
   }
   return ret_err;
+}
+
+/* Send a string to the LDC501 over telnet */
+void ldc_tx(char str)
+{
+//	len = sprintf (buf, "SILD%.2f\n", laservalue);
+	uint16_t len = sizeof(str);
+	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
+	pbuf_take(tcTx->p, (char*)str, len); // copy data to pbuf
+	telnet_client_send(pcbTx, tcTx); //send it
+	pbuf_free(tcTx->p); //free up the pbuf
 }
 
 void one_off (void) {
@@ -272,6 +286,8 @@ void one_off (void) {
 	pbuf_take(tcTx->p, (char*)buf, len); // copy data to pbuf
 	telnet_client_send(pcbTx, tcTx); //send it
 	pbuf_free(tcTx->p); //free up the pbuf
+
+	ldc_tx("Happy Wednesday");
 }
 
 /** This callback is called, when the client receives some data from the server
@@ -337,7 +353,8 @@ static err_t telnet_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
     #endif
 
     /* handle the received data */
-    telnet_client_handle(tpcb, tc);
+//    example_client_handle(tpcb, tc);
+    telnet_client_handle(tpcb, tc, p);
 
     pbuf_free(p);
 
@@ -518,8 +535,9 @@ static void telnet_client_connection_close(struct tcp_pcb *tpcb, struct telnet_c
 
 /* Handle the incoming TCP Data */
 
-static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc)
+static void example_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc)
 {
+	//function has been called as telnet_client_handle(tpcb, tc);
   #ifdef TELNET_DEBUG
     printf("[Telnet Client] Handling incoming data.\n\r");
   #endif
@@ -540,3 +558,46 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
 	counter++;
 
 }
+
+/* Stuart's function to handle the incoming TCP Data */
+
+static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc, struct pbuf *p)
+{
+	//function has been called as telnet_client_handle(tpcb, tc, p);
+  #ifdef TELNET_DEBUG
+    printf("[Telnet Client] Handling incoming data.\n\r");
+  #endif
+    /* get the Remote IP */
+	ip4_addr_t inIP = tpcb->remote_ip;
+	uint16_t inPort = tpcb->remote_port;
+
+	/* Extract the IP */
+	char *remIP = ipaddr_ntoa(&inIP);
+
+	tcTx->state = tc->state;
+	tcTx->pcb = tc->pcb;
+	tcTx->p = tc->p;
+
+	tcTx = tc;
+	pcbTx = tpcb;
+
+	if (p -> len != p -> tot_len) {//spans more that one buffer and I haven't allowed for this yet
+#ifdef TELNET_DEBUG
+  printf("[Telnet Client] ERROR - Received data spans more than one pbuf.\n\r");
+#endif
+	}
+
+	/* Copy payload into a string */
+//	char str[256]; //the maximum LDC501 output spec
+	char str[p -> len];
+	memcpy(str, p -> payload, p -> len);
+    printf("[Telnet Client] Message: %s\n\r",str);
+    printf("String length: %u\n\r",sizeof(str));
+    printf("p -> len: %u\n\r",p -> len);
+    printf("p -> tot_len: %u\n\r",p -> tot_len);
+
+	counter++;
+
+}
+
+

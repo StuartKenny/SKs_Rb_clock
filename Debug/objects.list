@@ -1,4 +1,5 @@
 "./Core/Src/adc.o"
+"./Core/Src/ldc501.o"
 "./Core/Src/main.o"
 "./Core/Src/mw_gen.o"
 "./Core/Src/stm32h7xx_hal_msp.o"
@@ -6,7 +7,6 @@
 "./Core/Src/syscalls.o"
 "./Core/Src/sysmem.o"
 "./Core/Src/system_stm32h7xx.o"
-"./Core/Src/tcp_client.o"
 "./Core/Src/template.o"
 "./Core/Src/timers.o"
 "./Core/Startup/startup_stm32h743zitx.o"

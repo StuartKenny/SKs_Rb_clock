@@ -8,13 +8,13 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <ldc501.h>
 #include "main.h"
 #include "lwip.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mw_gen.h"
-#include "tcp_client.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -301,14 +301,14 @@ int main(void)
 	telnet_client_init(); //initialise telnet client
 	printf("Telnet client initialised\r\n");
 
-	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
-	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
-		//loop here until telnet is initialised or 15s has elapsed
-//		printf("Waiting for telnet to initialise\r\n");
-//		printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
-	}
-	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
-	printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
+//	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
+//	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
+//		//loop here until telnet is initialised or 15s has elapsed
+////		printf("Waiting for telnet to initialise\r\n");
+////		printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
+//	}
+//	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
+//	printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
 
 //	printf("Sending test packets\r\n");
 //	one_off();
