@@ -56,6 +56,7 @@
 #include <ldc501.h>
 #include "lwip/tcp.h"
 #include <stdbool.h>
+#include <string.h>
 
 /* Typedefs -----------------------------------------------------------*/
 /* structure for maintaining connection infos to be passed as argument
@@ -97,6 +98,8 @@ struct tcp_pcb *pcbTx = 0;
 void telnet_client_init(void);
 /* Returns the state of the telnet link */
 __attribute__((section(".itcm"))) bool is_telnet_initialised(void);
+/* Sends a string to the LDC501 over Ethernet */
+__attribute__((section(".itcm"))) void ldc_tx(const char str[]);
 /* Me dicking about sending a few packets to see if it works */
 __attribute__((section(".itcm"))) void one_off (void);
 /* This callback will be called, when the client is connected to the server */
@@ -170,6 +173,7 @@ void telnet_client_init(void)
 	/* 2. Connect to the server */
 	ip_addr_t destIPADDR;
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
+//	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
 	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Beginning TCP connection.\n\r");
@@ -249,10 +253,11 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
 }
 
 /* Send a string to the LDC501 over telnet */
-void ldc_tx(char str)
+//void ldc_tx(const char *str, size_t lengthofstring)
+void ldc_tx(const char str[])
 {
 //	len = sprintf (buf, "SILD%.2f\n", laservalue);
-	uint16_t len = sizeof(str);
+	uint16_t len = strlen(str);
 	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
 	pbuf_take(tcTx->p, (char*)str, len); // copy data to pbuf
 	telnet_client_send(pcbTx, tcTx); //send it
@@ -287,7 +292,10 @@ void one_off (void) {
 	telnet_client_send(pcbTx, tcTx); //send it
 	pbuf_free(tcTx->p); //free up the pbuf
 
-	ldc_tx("Happy Wednesday");
+//	const char string = "Happy Wednesday";
+//	ldc_tx(&string, sizeof(string));
+
+	ldc_tx("Happy Wednesday\r\n"); //works and is processed as newline
 }
 
 /** This callback is called, when the client receives some data from the server
@@ -588,9 +596,11 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
 	}
 
 	/* Copy payload into a string */
-//	char str[256]; //the maximum LDC501 output spec
-	char str[p -> len];
-	memcpy(str, p -> payload, p -> len);
+	uint16_t len = p -> len; //length of the payload
+	char str[len+1]; //holds the payload, with capacity for terminating character
+	memcpy(str, p -> payload, p -> len); //copy the payload across
+	str[len] = '\0'; //assigns null character to terminate string
+
     printf("[Telnet Client] Message: %s\n\r",str);
     printf("String length: %u\n\r",sizeof(str));
     printf("p -> len: %u\n\r",p -> len);
