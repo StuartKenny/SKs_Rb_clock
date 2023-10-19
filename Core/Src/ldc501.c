@@ -83,6 +83,18 @@ extern TIM_HandleTypeDef htim1;
 /* Defines ------------------------------------------------------------*/
 #define TELNET_DEBUG
 #define LDC501PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
+#define CONNECTED_MESSAGE "220 Welcome DBG server!"
+#define CONTROLLER_ID "Stanford_Research_Systems,LDC501,s/n148374,ver2.46" //the expected response from the laser controller
+#define LASER_DIODE_ONOFF "LDON"
+#define SET_LASER_DIODE_CURRENT "SILD"
+#define READ_LASER_DIODE_CURRENT "RILD" //can be different from the setpoint, e.g. when modulation used
+#define READ_LASER_POWER "RWPD" //returns reading in mW
+#define LASER_CONTROL_MODE "SMOD" //should be 0 for constant current
+#define READ_INTERLOCK_STATE "ILOC"
+#define TEC_CURRENT_ONOFF "TEON"
+#define TEMP "TEMP"
+#define READ_LD_TEMPERATURE "TTRD" //returns reading in degrees C
+#define TEC_CONTROL_MODE "TMOD" //should be 1 for constant temperature
 
 /* Variables ---------------------------------------------------------*/
 bool telnet_initialised = 0;
@@ -98,6 +110,8 @@ struct tcp_pcb *pcbTx = 0;
 void telnet_client_init(void);
 /* Returns the state of the telnet link */
 __attribute__((section(".itcm"))) bool is_telnet_initialised(void);
+/* Initialises Ethernet comms with LDC501 */
+__attribute__((section(".itcm"))) void init_ldc_comms(void);
 /* Sends a string to the LDC501 over Ethernet */
 __attribute__((section(".itcm"))) void ldc_tx(const char str[]);
 /* Me dicking about sending a few packets to see if it works */
@@ -172,12 +186,12 @@ void telnet_client_init(void)
 
 	/* 2. Connect to the server */
 	ip_addr_t destIPADDR;
-//	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
+	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
-	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
+//	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Beginning TCP connection.\n\r");
-		printf("[Telnet Client] Connecting to 192.168.1.14 on port %d.\n\r", LDC501PORT);
+		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC501PORT);
 	#endif
 	tcp_connect(tpcb, &destIPADDR, LDC501PORT, telnet_client_connected);
 	#ifdef TELNET_DEBUG
@@ -252,6 +266,17 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
   return ret_err;
 }
 
+/* Initialise Ethernet comms with LDC501 */
+void init_ldc_comms(void)
+{
+	ldc_tx("\r\n"); //return character
+	ldc_tx("uloc1\r\n"); //unlock comms
+	ldc_tx("*idn?\r\n"); //request ID
+	//will then receive message: 220 Welcome DBG server!
+	ldc_tx("TEON1\r\n"); //Turn TEC on
+	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
+}
+
 /* Send a string to the LDC501 over telnet */
 //void ldc_tx(const char *str, size_t lengthofstring)
 void ldc_tx(const char str[])
@@ -269,7 +294,7 @@ void one_off (void) {
 	uint8_t counter = 0;
 
 	/* Prepare the first message to send to the server */
-	int len = sprintf (buf, "Sending telnet_client Message %d\n", counter);
+	int len = sprintf (buf, "Sending telnet_client Message %d\n\0", counter);
 
 	/* allocate pbuf */
 	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL);

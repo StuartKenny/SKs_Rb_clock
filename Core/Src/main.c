@@ -136,6 +136,7 @@ extern uint32_t measure_POP_cycle(void);
 //extern void telnet_client_init(void);
 extern bool is_telnet_initialised(void);
 extern void one_off (void);
+extern void init_ldc_comms(void);
 
 /* USER CODE END PFP */
 
@@ -338,8 +339,10 @@ int main(void)
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
-			printf("Sending test packets\r\n");
-			one_off(); //send a few test characters to computer
+			printf("Initialising comms with LDC501\r\n");
+			init_ldc_comms();
+//			printf("Sending test packets\r\n");
+//			one_off(); //send a few test characters to computer
 //			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
 //
 //			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
@@ -428,7 +431,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 96;
+  RCC_OscInitStruct.PLL.PLLN = 80;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;
