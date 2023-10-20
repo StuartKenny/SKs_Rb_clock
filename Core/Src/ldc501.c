@@ -100,6 +100,8 @@ extern TIM_HandleTypeDef htim1;
 bool telnet_initialised = 0;
 int counter = 0;
 uint8_t data[100];
+bool ldc_response_received = false;
+char last_LDC_message[257] = 0; //maximum sized message is 256B
 
 /* create a struct to store data */
 struct telnet_client_struct *tcTx = 0;
@@ -131,6 +133,10 @@ __attribute__((section(".itcm"))) static void telnet_client_connection_close(str
 /* This is the part where we are going to handle the incoming data from the server */
 __attribute__((section(".itcm"))) static void example_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc);
 __attribute__((section(".itcm"))) static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc, struct pbuf *p);
+extern uint32_t start_timer(TIM_TypeDef * timer);
+extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern uint32_t check_timer(TIM_TypeDef *timer);
+extern void Error_Handler(void);
 
 /**
   * @brief  Function x.
@@ -273,12 +279,14 @@ void init_ldc_comms(void)
 	ldc_tx("uloc1\r\n"); //unlock comms
 	ldc_tx("*idn?\r\n"); //request ID
 	//will then receive message: 220 Welcome DBG server!
+	ldc_tx("TMOD1\r\n"); //Constant temperature mode
+	ldc_tx("TEMP21.15\r\n"); //Set operating point of 21.15C
 	ldc_tx("TEON1\r\n"); //Turn TEC on
+	ldc_tx("SMOD0\r\n"); //LD constant current mode
 	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
 }
 
 /* Send a string to the LDC501 over telnet */
-//void ldc_tx(const char *str, size_t lengthofstring)
 void ldc_tx(const char str[])
 {
 //	len = sprintf (buf, "SILD%.2f\n", laservalue);
@@ -287,6 +295,38 @@ void ldc_tx(const char str[])
 	pbuf_take(tcTx->p, (char*)str, len); // copy data to pbuf
 	telnet_client_send(pcbTx, tcTx); //send it
 	pbuf_free(tcTx->p); //free up the pbuf
+}
+
+/* Sends an LDC command and returns a response
+ * this is a BLOCKING command
+ * CPU will remain here until a response is received or the function times out
+ * Uses the MW_TIMER counter
+ */
+const char* ldc_query(const char str[])
+{
+	//function may be extended to retry 3 times
+	uint16_t len = strlen(str);
+	char query_text[len+3];
+	sprintf (query_text, str, "?\r\n");
+	ldc_response_received = false;
+	ldc_tx(query_text); //transmit command
+	start_timer(MW_TIMER);
+	if(!(ldc_response_received || (check_timer(MW_TIMER) < 1000000)) {//loop until response received or timed out
+	    /* Ethernet handling */
+		ethernetif_input(&gnetif);
+		sys_check_timeouts();
+	}
+		//test for it being an answer to the query
+	last_LDC_message
+		char *result = "Flavio";
+		return result;
+	}
+	//timeout
+	//send back fail response
+
+	if (check_timer(MW_TIMER) < 1000000) return(false); //Still waiting
+	stop_timer(MW_TIMER);
+
 }
 
 void one_off (void) {
@@ -600,6 +640,10 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
   #ifdef TELNET_DEBUG
     printf("[Telnet Client] Handling incoming data.\n\r");
   #endif
+
+    /* Could make this more versatile by testing the IP before assuming it's from the LDC */
+	ldc_response_received = true;
+
     /* get the Remote IP */
 	ip4_addr_t inIP = tpcb->remote_ip;
 	uint16_t inPort = tpcb->remote_port;
@@ -630,6 +674,7 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
     printf("String length: %u\n\r",sizeof(str));
     printf("p -> len: %u\n\r",p -> len);
     printf("p -> tot_len: %u\n\r",p -> tot_len);
+    strcpy(last_LDC_message, str);
 
 	counter++;
 
