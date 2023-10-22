@@ -82,7 +82,12 @@ extern TIM_HandleTypeDef htim1;
 
 /* Defines ------------------------------------------------------------*/
 #define TELNET_DEBUG
-#define LDC501PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
+
+#define LDC_ADDR1 192
+#define LDC_ADDR2 168
+#define LDC_ADDR3 1
+#define LDC_ADDR4 14 //Micawber
+#define LDC_PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
 #define CONNECTED_MESSAGE "220 Welcome DBG server!"
 #define CONTROLLER_ID "Stanford_Research_Systems,LDC501,s/n148374,ver2.46" //the expected response from the laser controller
 #define LASER_DIODE_ONOFF "LDON"
@@ -101,7 +106,7 @@ bool telnet_initialised = 0;
 int counter = 0;
 uint8_t data[100];
 bool ldc_response_received = false;
-char last_LDC_message[257] = 0; //maximum sized message is 256B
+//char last_LDC_message[257] = 0; //maximum sized message is 256B
 
 /* create a struct to store data */
 struct telnet_client_struct *tcTx = 0;
@@ -192,14 +197,16 @@ void telnet_client_init(void)
 
 	/* 2. Connect to the server */
 	ip_addr_t destIPADDR;
-	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
+//	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
+	IP_ADDR4(&destIPADDR, LDC_ADDR1, LDC_ADDR2, LDC_ADDR3, LDC_ADDR4); //IP address of LDC501
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Beginning TCP connection.\n\r");
-		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC501PORT);
+		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC_PORT);
+		printf("[Telnet Client] Connecting to %s on port %d.\n\r", ipaddr_ntoa(&destIPADDR), LDC_PORT);
 	#endif
-	tcp_connect(tpcb, &destIPADDR, LDC501PORT, telnet_client_connected);
+	tcp_connect(tpcb, &destIPADDR, LDC_PORT, telnet_client_connected);
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Called tcp_connect, awaiting callback.\n\r");
 	#endif
@@ -297,37 +304,37 @@ void ldc_tx(const char str[])
 	pbuf_free(tcTx->p); //free up the pbuf
 }
 
-/* Sends an LDC command and returns a response
- * this is a BLOCKING command
- * CPU will remain here until a response is received or the function times out
- * Uses the MW_TIMER counter
- */
-const char* ldc_query(const char str[])
-{
-	//function may be extended to retry 3 times
-	uint16_t len = strlen(str);
-	char query_text[len+3];
-	sprintf (query_text, str, "?\r\n");
-	ldc_response_received = false;
-	ldc_tx(query_text); //transmit command
-	start_timer(MW_TIMER);
-	if(!(ldc_response_received || (check_timer(MW_TIMER) < 1000000)) {//loop until response received or timed out
-	    /* Ethernet handling */
-		ethernetif_input(&gnetif);
-		sys_check_timeouts();
-	}
-		//test for it being an answer to the query
-	last_LDC_message
-		char *result = "Flavio";
-		return result;
-	}
-	//timeout
-	//send back fail response
-
-	if (check_timer(MW_TIMER) < 1000000) return(false); //Still waiting
-	stop_timer(MW_TIMER);
-
-}
+///* Sends an LDC command and returns a response
+// * this is a BLOCKING command
+// * CPU will remain here until a response is received or the function times out
+// * Uses the MW_TIMER counter
+// */
+//const char* ldc_query(const char str[])
+//{
+//	//function may be extended to retry 3 times
+//	uint16_t len = strlen(str);
+//	char query_text[len+3];
+//	sprintf (query_text, str, "?\r\n");
+//	ldc_response_received = false;
+//	ldc_tx(query_text); //transmit command
+//	start_timer(MW_TIMER);
+//	if(!(ldc_response_received || (check_timer(MW_TIMER) < 1000000)) {//loop until response received or timed out
+//	    /* Ethernet handling */
+//		ethernetif_input(&gnetif);
+//		sys_check_timeouts();
+//	}
+//		//test for it being an answer to the query
+//	last_LDC_message
+//		char *result = "Flavio";
+//		return result;
+//	}
+//	//timeout
+//	//send back fail response
+//
+//	if (check_timer(MW_TIMER) < 1000000) return(false); //Still waiting
+//	stop_timer(MW_TIMER);
+//
+//}
 
 void one_off (void) {
 	char buf[100];
@@ -674,7 +681,7 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
     printf("String length: %u\n\r",sizeof(str));
     printf("p -> len: %u\n\r",p -> len);
     printf("p -> tot_len: %u\n\r",p -> tot_len);
-    strcpy(last_LDC_message, str);
+//    strcpy(last_LDC_message, str);
 
 	counter++;
 

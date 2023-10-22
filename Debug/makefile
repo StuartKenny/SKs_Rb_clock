@@ -70,8 +70,8 @@ all: main-build
 main-build: atomic_clock.elf secondary-outputs
 
 # Tool invocations
-atomic_clock.elf atomic_clock.map: $(OBJS) $(USER_OBJS) C:\Users\sek529\Github\atomic_clock\STM32H743ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "atomic_clock.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\sek529\Github\atomic_clock\STM32H743ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="atomic_clock.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+atomic_clock.elf atomic_clock.map: $(OBJS) $(USER_OBJS) C:\Users\micro\GitHub\atomic_clock\STM32H743ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "atomic_clock.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\micro\GitHub\atomic_clock\STM32H743ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="atomic_clock.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
