@@ -86,7 +86,7 @@ extern TIM_HandleTypeDef htim1;
 #define LDC_ADDR1 192
 #define LDC_ADDR2 168
 #define LDC_ADDR3 1
-#define LDC_ADDR4 14 //Micawber
+#define LDC_ADDR4 11 //14 for Micawber, 12 for Oscar, 11 for LDC
 #define LDC_PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
 #define CONNECTED_MESSAGE "220 Welcome DBG server!"
 #define CONTROLLER_ID "Stanford_Research_Systems,LDC501,s/n148374,ver2.46" //the expected response from the laser controller
@@ -200,10 +200,10 @@ void telnet_client_init(void)
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
 //	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
-	IP_ADDR4(&destIPADDR, LDC_ADDR1, LDC_ADDR2, LDC_ADDR3, LDC_ADDR4); //IP address of LDC501
+	IP_ADDR4(&destIPADDR, LDC_ADDR1, LDC_ADDR2, LDC_ADDR3, LDC_ADDR4);
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Beginning TCP connection.\n\r");
-		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC_PORT);
+//		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC_PORT);
 		printf("[Telnet Client] Connecting to %s on port %d.\n\r", ipaddr_ntoa(&destIPADDR), LDC_PORT);
 	#endif
 	tcp_connect(tpcb, &destIPADDR, LDC_PORT, telnet_client_connected);
@@ -291,6 +291,8 @@ void init_ldc_comms(void)
 	ldc_tx("TEON1\r\n"); //Turn TEC on
 	ldc_tx("SMOD0\r\n"); //LD constant current mode
 	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
+	ldc_tx("SILD?\r\n"); //Query laser diode current
+	ldc_tx("ILOC?\r\n"); //Query laser diode current
 }
 
 /* Send a string to the LDC501 over telnet */
