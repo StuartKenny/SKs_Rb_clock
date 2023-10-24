@@ -78,6 +78,22 @@ enum telnet_client_states
   TC_CLOSING
 };
 
+/* structure for managing comms to/from the laser driver*/
+struct ldc_comms
+{
+  u8_t state;             /* current connection state */
+  u8_t retries;
+  char message[257]; //maximum sized message is 256B
+};
+
+/*  protocol states */
+enum ldc_comms_states
+{
+  LDC_IDLE = 0,
+  LDC_AWAITING_RESPONSE,
+  LDC_DATA_RECEIVED
+};
+
 extern TIM_HandleTypeDef htim1;
 
 /* Defines ------------------------------------------------------------*/
@@ -106,11 +122,14 @@ bool telnet_initialised = 0;
 int counter = 0;
 uint8_t data[100];
 bool ldc_response_received = false;
-//char last_LDC_message[257] = 0; //maximum sized message is 256B
 
 /* create a struct to store data */
 struct telnet_client_struct *tcTx = 0;
 struct tcp_pcb *pcbTx = 0;
+
+/* create a struct to store LDC comms */
+struct ldc_comms *ldc_packet = 0;
+
 
 /* Function prototypes -----------------------------------------------*/
 /* Establishes connection with telnet server */
@@ -298,7 +317,6 @@ void init_ldc_comms(void)
 /* Send a string to the LDC501 over telnet */
 void ldc_tx(const char str[])
 {
-//	len = sprintf (buf, "SILD%.2f\n", laservalue);
 	uint16_t len = strlen(str);
 	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
 	pbuf_take(tcTx->p, (char*)str, len); // copy data to pbuf
@@ -306,12 +324,14 @@ void ldc_tx(const char str[])
 	pbuf_free(tcTx->p); //free up the pbuf
 }
 
+
+
 ///* Sends an LDC command and returns a response
 // * this is a BLOCKING command
 // * CPU will remain here until a response is received or the function times out
 // * Uses the MW_TIMER counter
 // */
-//const char* ldc_query(const char str[])
+//const char* ldc_query(const char str[], bool query)
 //{
 //	//function may be extended to retry 3 times
 //	uint16_t len = strlen(str);
