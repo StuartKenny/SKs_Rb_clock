@@ -63,6 +63,8 @@ TIM_TypeDef * FAST_TIMER = TIM3; // Clocked at 1 MHz
 //TIM2 and TIM5 are 32-bit general purpose timers
 TIM_TypeDef * MW_TIMER = TIM2; // Clocked 1MHz
 TIM_TypeDef * SWEEP_TIMER = TIM5; // Clocked 1MHz
+//TIM12 is a 16-bit general purpose timer
+TIM_TypeDef * ETHERNET_TIMER = TIM12; // Clocked at 2 kHz
 
 /* Function prototypes -----------------------------------------------*/
 __attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);

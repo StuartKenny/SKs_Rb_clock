@@ -122,6 +122,7 @@ extern TIM_TypeDef * FAST_TIMER;
 extern TIM_TypeDef * SLOW_TIMER;
 extern TIM_TypeDef * MW_TIMER;
 extern TIM_TypeDef * SWEEP_TIMER;
+extern TIM_TypeDef * ETHERNET_TIMER;
 
 /* USER CODE END Private defines */
 
