@@ -78,11 +78,36 @@ enum telnet_client_states
   TC_CLOSING
 };
 
+/* structure for managing comms to/from the laser driver*/
+struct ldc_comms
+{
+  u8_t state; //current connection state
+  u8_t retries;
+  char message[257]; //maximum sized message is 256 B
+};
+
+/*  protocol states */
+enum ldc_comms_states
+{
+  LDC_DISCONNECTED = 0,
+  LDC_CONNECTED_IDLE,
+  LDC_AWAITING_RESPONSE,
+  LDC_RESPONSE_RECEIVED
+};
+
+extern struct netif gnetif;
 extern TIM_HandleTypeDef htim1;
 
 /* Defines ------------------------------------------------------------*/
 #define TELNET_DEBUG
-#define LDC501PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
+#define TELNET_RETRIES 3
+#define TELNET_TIMEOUT 2000 //2s
+
+#define LDC_ADDR1 192
+#define LDC_ADDR2 168
+#define LDC_ADDR3 1
+#define LDC_ADDR4 11 //14 for Micawber, 12 for Oscar, 11 for LDC
+#define LDC_PORT 8886 //choose 8888 for command port and 8886 for debug (provides status feedback)
 #define CONNECTED_MESSAGE "220 Welcome DBG server!"
 #define CONTROLLER_ID "Stanford_Research_Systems,LDC501,s/n148374,ver2.46" //the expected response from the laser controller
 #define LASER_DIODE_ONOFF "LDON"
@@ -104,6 +129,9 @@ uint8_t data[100];
 /* create a struct to store data */
 struct telnet_client_struct *tcTx = 0;
 struct tcp_pcb *pcbTx = 0;
+
+/* create a struct to store LDC comms */
+struct ldc_comms *ldc_packet = 0;
 
 /* Function prototypes -----------------------------------------------*/
 /* Establishes connection with telnet server */
@@ -186,14 +214,16 @@ void telnet_client_init(void)
 
 	/* 2. Connect to the server */
 	ip_addr_t destIPADDR;
-	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
-//	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
-//	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
-	#ifdef TELNET_DEBUG
-		printf("[Telnet Client] Beginning TCP connection.\n\r");
-		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC501PORT);
-	#endif
-	tcp_connect(tpcb, &destIPADDR, LDC501PORT, telnet_client_connected);
+	//	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
+	//	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
+	//	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
+		IP_ADDR4(&destIPADDR, LDC_ADDR1, LDC_ADDR2, LDC_ADDR3, LDC_ADDR4);
+		#ifdef TELNET_DEBUG
+			printf("[Telnet Client] Beginning TCP connection.\n\r");
+	//		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC_PORT);
+			printf("[Telnet Client] Connecting to %s on port %d.\n\r", ipaddr_ntoa(&destIPADDR), LDC_PORT);
+		#endif
+			tcp_connect(tpcb, &destIPADDR, LDC_PORT, telnet_client_connected);
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Called tcp_connect, awaiting callback.\n\r");
 	#endif
@@ -272,7 +302,6 @@ void init_ldc_comms(void)
 	ldc_tx("\r\n"); //return character
 	ldc_tx("uloc1\r\n"); //unlock comms
 	ldc_tx("*idn?\r\n"); //request ID
-	//will then receive message: 220 Welcome DBG server!
 	ldc_tx("TEON1\r\n"); //Turn TEC on
 	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
 }
@@ -281,12 +310,40 @@ void init_ldc_comms(void)
 //void ldc_tx(const char *str, size_t lengthofstring)
 void ldc_tx(const char str[])
 {
-//	len = sprintf (buf, "SILD%.2f\n", laservalue);
 	uint16_t len = strlen(str);
 	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
 	pbuf_take(tcTx->p, (char*)str, len); // copy data to pbuf
 	telnet_client_send(pcbTx, tcTx); //send it
+	printf("Sent over Ethernet: %s\r\n", str);
 	pbuf_free(tcTx->p); //free up the pbuf
+}
+
+/* Send a command to the LDC501 over telnet */
+bool ldc_command(const char str[])
+{
+	ldc_packet->retries == 0;
+	while (ldc_packet->retries < TELNET_RETRIES) {
+		printf ("Entered command while loop");
+		start_timer(ETHERNET_TIMER);
+		printf ("Started Ethernet timer");
+		ldc_tx(str); //Send string
+		ldc_packet->state = LDC_AWAITING_RESPONSE; //set state to flag that a response is needed before sending anything further
+		while ((ldc_packet->state == LDC_AWAITING_RESPONSE) && (check_timer(ETHERNET_TIMER) < TELNET_TIMEOUT)) {//loop here until timeout or response is received
+			printf ("Spinning round loop waiting for a response");
+			/* Ethernet handling */
+			ethernetif_input(&gnetif);
+			sys_check_timeouts();
+		}
+		stop_timer(ETHERNET_TIMER);
+		if (ldc_packet->state == LDC_RESPONSE_RECEIVED) {
+			printf ("Response received");
+			return (true); //success
+		}
+		ldc_packet->retries++; //increase retry count
+		printf ("Issued command %s but no response. Retry %u", str, ldc_packet->retries);
+	}
+	printf ("Command %s failed after %u attempts", str, ldc_packet->retries);
+	return (false); //failure after timeout
 }
 
 void one_off (void) {
