@@ -93,6 +93,8 @@ const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
 //static const double MW_DELTA = -1817; //MW offset
 static const double MW_DELTA = 1000; //MW offset
 
+double ild = 160; //laser diode current, 160mA initial value
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -135,10 +137,11 @@ extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
 
 /* Telnet prototypes*/
-//extern void telnet_client_init(void);
-extern bool is_telnet_initialised(void);
+extern bool telnet_client_init(void);
 extern void one_off (void);
-extern void init_ldc_comms(void);
+extern bool init_ldc_comms(void);
+extern bool init_ldc_tec(void);
+extern void set_laser_current(const double i);
 
 /* USER CODE END PFP */
 
@@ -212,9 +215,6 @@ int main(void)
   printf("\033c"); //clears screen
   printf("Atomic Clock - Source __TIMESTAMP__: %s\r\n", __TIMESTAMP__);
 
-	#ifndef SYNTH_ENABLE
-	printf("WARNING - MW Synthesiser is disabled\r\n");
-	#endif //SYNTH_ENABLE
 	#ifdef SYNTH_ENABLE
 		if (init_synthesiser(MW_power) != SUCCESS) {
 			printf("Synthesiser initialisation failed!\r\n");
@@ -223,6 +223,8 @@ int main(void)
 		#ifdef MW_VERBOSE
 			printf("MW power setting (LO2GAIN): 0x%x \r\n", MW_power);
 		#endif	//MW_VERBOSE
+	#else //SYNTH_ENABLE
+		printf("WARNING - MW Synthesiser is disabled\r\n");
 	#endif //SYNTH_ENABLE
 
 	/* Start a low power timer to flash an LED approximately every second */
@@ -301,8 +303,33 @@ int main(void)
 //	timer_delay(MW_TIMER, 7000);
 //	timer_delay(MW_TIMER, 50000);
 
-	telnet_client_init(); //initialise telnet client
-	printf("Telnet client initialised\r\n");
+//	telnet_client_init();
+//	bool temp_bool;
+//	temp_bool = telnet_client_init(); //initialise telnet client
+//	if(!temp_bool) {
+	if(telnet_client_init()) {
+		printf("Failed to send telnet connection request \r\n");
+	                Error_Handler();
+	}
+//	printf("Telnet_client_init returns: %i\r\n", temp_bool);
+	printf("Telnet connection request sent and callbacks enabled\r\n");
+
+	init_ldc_comms();
+	if(!init_ldc_comms()) { //initialise comms with LDC501
+		printf("Failed to initialise comms with LDC501\r\n");
+	                Error_Handler();
+	}
+	printf("Comms established with LDC501\r\n");
+
+	if(!init_ldc_tec() != ERR_OK) { //fire up TEC
+		printf("Failed to turn on TEC\r\n");
+	                Error_Handler();
+	}
+	printf("Laser TEC enabled\r\n");
+
+	set_laser_current(ild);
+	ild = 171.45678;
+	set_laser_current(ild);
 
 //	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
 //	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {

@@ -33,7 +33,7 @@ extern "C" {
 //void HAL_HRTIM_MspPostInit(HRTIM_HandleTypeDef *hhrtim);
 
 /* Exported functions prototypes ---------------------------------------------*/
-void telnet_client_init(void);
+//err_t telnet_client_init(void);
 
 /* Private defines -----------------------------------------------------------*/
 //#define EXAMPLE_THINGY 31250

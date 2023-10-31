@@ -103,8 +103,8 @@ extern TIM_HandleTypeDef htim1;
 //#define TELNET_DEBUG
 #define LDC_DEBUG
 #define TELNET_RETRIES 3
-#define TELNET_TIMEOUT 2000 //2s
-
+#define TELNET_TIMEOUT 2000 //1s
+#define TEC_STABILISE_TIME 10000 //5s
 #define LDC_ADDR1 192
 #define LDC_ADDR2 168
 #define LDC_ADDR3 1
@@ -142,11 +142,15 @@ char ldc_comms_message[257] = {"Initial message"}; //maximum sized message is 25
 
 /* Function prototypes -----------------------------------------------*/
 /* Establishes connection with telnet server */
-void telnet_client_init(void);
+__attribute__((section(".itcm"))) bool telnet_client_init(void);
 /* Initialises Ethernet comms with LDC501 */
-__attribute__((section(".itcm"))) void init_ldc_comms(void);
+__attribute__((section(".itcm"))) bool init_ldc_comms(void);
+/* Initialises LDC501 TEC */
+__attribute__((section(".itcm"))) bool init_ldc_tec(void);
 /* Sends a string to the LDC501 over Ethernet */
 __attribute__((section(".itcm"))) void ldc_tx(const char str[]);
+/* Sets laser current */
+__attribute__((section(".itcm"))) void set_laser_current(const double i);
 /* Sends a command to the LDC501 and waits for a response */
 __attribute__((section(".itcm"))) bool ldc_query(const char str[]);
 /* Me dicking about sending a few packets to see if it works */
@@ -211,52 +215,103 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 }
 
-/* IMPLEMENTATION FOR TELNET CLIENT
-
-1. Create TCP block.
-2. connect to the server
-3. start communicating
-*/
-
-void telnet_client_init(void)
+/**
+ * Initialises the connection to the LDC by initiating connection
+ * and setting up the necessary callbacks
+ * @return ERR_VAL if invalid arguments are given
+ *         ERR_OK if connect request has been sent
+ *         other err_t values if connect request couldn't be sent
+ */
+bool telnet_client_init(void)
 {
-	/* 1. create new tcp pcb */
+	/* create new tcp pcb */
 	struct tcp_pcb *tpcb;
 	tpcb = tcp_new();
 
-	/* 2. Connect to the server */
+	/* Connect to the server */
 	ip_addr_t destIPADDR;
-	//	IP_ADDR4(&destIPADDR, 192, 168, 1, 11); //IP address of LDC501
-	//	IP_ADDR4(&destIPADDR, 192, 168, 1, 12); //IP address of Oscar - firewall blocking problems :-(
-	//	IP_ADDR4(&destIPADDR, 192, 168, 1, 14); //IP address of Micawber
-		IP_ADDR4(&destIPADDR, LDC_ADDR1, LDC_ADDR2, LDC_ADDR3, LDC_ADDR4);
-		#ifdef TELNET_DEBUG
-			printf("[Telnet Client] Beginning TCP connection.\n\r");
-	//		printf("[Telnet Client] Connecting to 192.168.1.11 on port %d.\n\r", LDC_PORT);
-			printf("[Telnet Client] Connecting to %s on port %d.\n\r", ipaddr_ntoa(&destIPADDR), LDC_PORT);
-		#endif
-			tcp_connect(tpcb, &destIPADDR, LDC_PORT, telnet_client_connected);
+	IP_ADDR4(&destIPADDR, LDC_ADDR1, LDC_ADDR2, LDC_ADDR3, LDC_ADDR4);
+	#ifdef TELNET_DEBUG
+		printf("[Telnet Client] Beginning TCP connection.\n\r");
+		printf("[Telnet Client] Connecting to %s on port %d.\n\r", ipaddr_ntoa(&destIPADDR), LDC_PORT);
+	#endif //TELNET_DEBUG
+	err_t ret = tcp_connect(tpcb, &destIPADDR, LDC_PORT, telnet_client_connected);
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Called tcp_connect, awaiting callback.\n\r");
-	#endif
+		printf("[Telnet Client] tcp_connect returned %i\n\r", ret);
+	#endif //TELNET_DEBUG
+	if(ret == ERR_OK) {//if the TCP connection request worked
+		ldc_comms_state = LDC_CONNECTED_IDLE;
+		start_timer(ETHERNET_TIMER);
+		while ((ldc_comms_state == LDC_CONNECTED_IDLE) && (check_timer(ETHERNET_TIMER) < TELNET_TIMEOUT)) {//loop here until timeout or response is received
+		}
+		stop_timer(ETHERNET_TIMER);
+		if(strncmp(ldc_comms_message, DEBUG_CONNECTED_MESSAGE, strlen(DEBUG_CONNECTED_MESSAGE)) == 0) {
+			#ifdef LDC_DEBUG
+				printf("Confirmation received - Connected to debug port");
+			#endif //LDC_DEBUG
+			return (true);
+		}
+	} else {
+		printf("[Telnet Client] ERROR: tcp_connect returned %i\n\r", ret);
+	}
+	return (false);
 }
 
-
-/* Initialise Ethernet comms with LDC501 */
-void init_ldc_comms(void)
+/**
+ * Initialise Ethernet comms with LDC501 and check ID
+ * @return TRUE if expected ID confirmed
+ */
+bool init_ldc_comms(void)
 {
 	ldc_tx("\r\n"); //return character
 	ldc_tx("uloc1\r\n"); //unlock comms
-//	ldc_tx("*idn?\r\n"); //request ID
-	ldc_tx("TEON1\r\n"); //Turn TEC on
-	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
+//	ldc_tx("TEON1\r\n"); //Turn TEC on
+//	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
 	if(ldc_query("*idn?\r\n")){; //request ID
-		printf("Successful command response\r\n");
+//		printf("Successful command response\r\n");
 		if(strncmp(ldc_comms_message, CONTROLLER_ID, strlen(CONTROLLER_ID)) == 0) {
-		    	printf("Expected controller ID received");
+			#ifdef LDC_DEBUG
+		    	printf("[LDC] Expected controller ID received\r\n");
+			#endif //LDC_DEBUG
+		    return(true);
 		}
 	}
+	return(false);
 }
+
+/**
+ * Initialise Ethernet comms with LDC501 and check ID
+ * @return TRUE if expected ID confirmed
+ */
+bool init_ldc_tec(void)
+{
+	ldc_tx("TMOD1\r\n"); //Constant temperature mode
+	ldc_tx("TEMP21.15\r\n"); //Set operating point of 21.15C
+	ldc_tx("TEON1\r\n"); //Turn TEC on
+	printf ("[LDC] TEC powered up - allowing 5s for TEC to stabilise");
+	start_timer(ETHERNET_TIMER);
+	while (check_timer(ETHERNET_TIMER) < TEC_STABILISE_TIME) {//loop here for a few seconds
+//			printf ("Spinning round loop waiting for a response");
+	}
+	stop_timer(ETHERNET_TIMER);
+	if(ldc_query("TTRD?\r\n")){; //read laser temperature
+		printf ("[LDC] Measured temperature: %s\r\n", ldc_comms_message);
+		    return(true);
+	}
+	return(false);
+}
+
+//ldc_tx("\r\n"); //return character
+//ldc_command("\r\n"); //return character
+//	ldc_tx("uloc1\r\n"); //unlock comms
+//	ldc_tx("*idn?\r\n"); //request ID
+//
+//	ldc_tx("SMOD0\r\n"); //LD constant current mode
+//	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
+//	ldc_tx("SILD?\r\n"); //Query laser diode current
+//	ldc_tx("ILOC?\r\n"); //Query laser diode current
+
 
 /* Send a string to the LDC501 over telnet */
 //void ldc_tx(const char *str, size_t lengthofstring)
@@ -269,11 +324,20 @@ void ldc_tx(const char str[])
 	#ifdef LDC_DEBUG
 //		printf("[LDC] Sent over Ethernet: %s\r\n", str);
 		printf("[LDC] Sent over Ethernet: %s", str); //no newline as one is included with the telnet message
-	#endif
+	#endif //LDC_DEBUG
 	/*disabled as the pbuf is already null.
 	 * This causes assertion errors but worried as this could overflow
 	 */
 	//pbuf_free(tcTx->p); //free up the pbuf
+}
+
+/* Set laser current */
+void set_laser_current(const double i)
+{
+	char string[12];
+//	uint8_t len = sprintf (string, "SILD%.2f\n", i);
+	sprintf (string, "SILD%.2f\n", i);
+	ldc_tx(string); //send command
 }
 
 /* Send a command to the LDC501 over telnet and await response */
@@ -281,9 +345,11 @@ bool ldc_query(const char str[])
 {
 	ldc_comms_retries = 0;
 	while (ldc_comms_retries < TELNET_RETRIES) {
-		printf ("Entered command while loop\r\n");
+#ifdef LDC_DEBUG
+		printf ("[LDC] Entered command while loop\r\n");
+		printf ("[LDC] Started Ethernet timer\r\n");
+#endif //LDC_DEBUG
 		start_timer(ETHERNET_TIMER);
-		printf ("Started Ethernet timer\r\n");
 		ldc_tx(str); //Send string
 		ldc_comms_state = LDC_AWAITING_RESPONSE; //set state to flag that a response is needed before sending anything further
 		while ((ldc_comms_state == LDC_AWAITING_RESPONSE) && (check_timer(ETHERNET_TIMER) < TELNET_TIMEOUT)) {//loop here until timeout or response is received
@@ -294,13 +360,19 @@ bool ldc_query(const char str[])
 		}
 		stop_timer(ETHERNET_TIMER);
 		if (ldc_comms_state == LDC_RESPONSE_RECEIVED) {
-			printf ("Response received\r\n");
+			#ifdef LDC_DEBUG
+				printf ("[LDC] Response to query received\r\n");
+			#endif //LDC_DEBUG
 			return (true); //success
 		}
 		ldc_comms_retries++; //increase retry count
-		printf ("Issued command %s but no response. Retry %u\r\n", str, ldc_comms_retries);
+		#ifdef LDC_DEBUG
+			printf ("[LDC] Issued command %s but no response. Retry %u\r\n", str, ldc_comms_retries);
+		#endif //LDC_DEBUG
 	}
-	printf ("Command %s failed after %u attempts\r\n", str, ldc_comms_retries);
+	#ifdef LDC_DEBUG
+		printf ("[LDC] Command %s failed after %u attempts\r\n", str, ldc_comms_retries);
+	#endif //LDC_DEBUG
 	return (false); //failure after timeout
 }
 
@@ -349,7 +421,7 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
 
 #ifdef TELNET_DEBUG
 	printf("[Telnet Client] telnet_client_connected function called.\n\r");
-#endif
+#endif #endif //TELNET_DEBUG
 
   LWIP_UNUSED_ARG(arg);
   LWIP_UNUSED_ARG(err);
@@ -381,7 +453,7 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
 
     #ifdef TELNET_DEBUG
 		printf("[Telnet Client] Successful connection.\n\r");
-	#endif
+	#endif //TELNET_DEBUG
 
 //	telnet_initialised = 1;
     ret_err = ERR_OK;
@@ -392,7 +464,7 @@ static err_t telnet_client_connected(void *arg, struct tcp_pcb *newpcb, err_t er
     telnet_client_connection_close(newpcb, tc);
 	#ifdef TELNET_DEBUG
 		printf("[Telnet Client] Connection closed due to memory error.\n\r");
-	#endif
+	#endif //TELNET_DEBUG
     /* return memory error */
     ret_err = ERR_MEM;
   }
@@ -406,7 +478,7 @@ static err_t telnet_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
 {
   #ifdef TELNET_DEBUG
     printf("[Telnet Client] Received data from server.\n\r");
-  #endif
+  #endif //TELNET_DEBUG
   struct telnet_client_struct *tc;
   err_t ret_err;
 
@@ -459,7 +531,7 @@ static err_t telnet_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
     tcp_recved(tpcb, p->tot_len);
     #ifdef TELNET_DEBUG
       printf("[Telnet Client] Acknowledging received data.\n\r");
-    #endif
+    #endif //TELNET_DEBUG
 
     /* handle the received data */
 //    example_client_handle(tpcb, tc);
@@ -529,9 +601,9 @@ static err_t telnet_client_poll(void *arg, struct tcp_pcb *tpcb)
   */
 static err_t telnet_client_sent(void *arg, struct tcp_pcb *tpcb, u16_t len)
 {
-#ifdef TELNET_DEBUG
-  printf("[Telnet Client] Server has acknowledged data sent by client.\n\r");
-#endif
+	#ifdef TELNET_DEBUG
+		printf("[Telnet Client] Server has acknowledged data sent by client.\n\r");
+	#endif //TELNET_DEBUG
   struct telnet_client_struct *tc;
 
   LWIP_UNUSED_ARG(len);
@@ -564,7 +636,7 @@ static void telnet_client_send(struct tcp_pcb *tpcb, struct telnet_client_struct
 {
   #ifdef TELNET_DEBUG
     printf("[Telnet Client] Sending data to server.\n\r");
-  #endif
+  #endif //TELNET_DEBUG
   struct pbuf *ptr;
   err_t wr_err = ERR_OK;
 
@@ -622,7 +694,7 @@ static void telnet_client_connection_close(struct tcp_pcb *tpcb, struct telnet_c
 {
   #ifdef TELNET_DEBUG
     printf("[Telnet Client] Closing connection.\n\r");
-  #endif
+  #endif //TELNET_DEBUG
   /* remove all callbacks */
   tcp_arg(tpcb, NULL);
   tcp_sent(tpcb, NULL);
@@ -642,40 +714,14 @@ static void telnet_client_connection_close(struct tcp_pcb *tpcb, struct telnet_c
 //  telnet_initialised = 0;
 }
 
-///* Handle the incoming TCP Data */
-//
-//static void example_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc)
-//{
-//	//function has been called as telnet_client_handle(tpcb, tc);
-//  #ifdef TELNET_DEBUG
-//    printf("[Telnet Client] Handling incoming data.\n\r");
-//  #endif
-//    /* get the Remote IP */
-//	ip4_addr_t inIP = tpcb->remote_ip;
-//	uint16_t inPort = tpcb->remote_port;
-//
-//	/* Extract the IP */
-//	char *remIP = ipaddr_ntoa(&inIP);
-//
-//	tcTx->state = tc->state;
-//	tcTx->pcb = tc->pcb;
-//	tcTx->p = tc->p;
-//
-//	tcTx = tc;
-//	pcbTx = tpcb;
-//
-//	counter++;
-//
-//}
-
-/* Stuart's function to handle the incoming TCP Data */
+/* Function to handle the incoming TCP Data */
 
 static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_struct *tc, struct pbuf *p)
 {
 	//function has been called as telnet_client_handle(tpcb, tc, p);
   #ifdef TELNET_DEBUG
     printf("[Telnet Client] Handling incoming data.\n\r");
-  #endif
+  #endif //TELNET_DEBUG
     /* get the Remote IP */
 	ip4_addr_t inIP = tpcb->remote_ip;
 	uint16_t inPort = tpcb->remote_port;
@@ -696,17 +742,19 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
 
 	/* Copy payload into a string */
 	uint16_t len = p -> len; //length of the payload
-	char str[len+1]; //holds the payload, with capacity for terminating character
-	memcpy(str, p -> payload, p -> len); //copy the payload across
-	str[len] = '\0'; //assigns null character to terminate string
+//	char str[len+1]; //holds the payload, with capacity for terminating character
+//	memcpy(str, p -> payload, p -> len); //copy the payload across
+	memcpy(ldc_comms_message, p -> payload, p -> len); //copy the payload across
+	ldc_comms_message[len] = '\0'; //assigns null character to terminate string
 	ldc_comms_state = LDC_RESPONSE_RECEIVED;
 	#ifdef LDC_DEBUG
 //		printf("[LDC] Message: %s\n\r",str);
-		printf("[LDC] Message: %s",str); //no newline as one is included with the telnet message received
+//		printf("[LDC] Message received: %s",str); //no newline as one is included with the telnet message received
+		printf("[LDC] Message received: %s",ldc_comms_message); //no newline as one is included with the telnet message received
 //    	printf("String length: %u\n\r",sizeof(str));
 //    	printf("p -> len: %u\n\r",p -> len);
 //    	printf("p -> tot_len: %u\n\r",p -> tot_len);
-	#endif
+	#endif //LDC_DEBUG
 }
 
 
