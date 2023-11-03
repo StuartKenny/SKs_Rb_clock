@@ -79,13 +79,13 @@ enum telnet_client_states
   TC_CLOSING
 };
 
-/* structure for managing comms to/from the laser driver*/
-struct ldc_comms
-{
-  u8_t state; //current connection state
-  u8_t retries;
-  char message[257]; //maximum sized message is 256 B
-};
+///* structure for managing comms to/from the laser driver*/
+//struct ldc_comms
+//{
+//  u8_t state; //current connection state
+//  u8_t retries;
+//  char message[257]; //maximum sized message is 256 B
+//};
 
 /*  protocol states */
 enum ldc_comms_states
@@ -102,8 +102,9 @@ extern TIM_HandleTypeDef htim1;
 /* Defines ------------------------------------------------------------*/
 //#define TELNET_DEBUG
 #define LDC_DEBUG
-#define TELNET_RETRIES 3
-#define TELNET_TIMEOUT 2000 //1s
+#define LASER_ENABLE //disable for testing
+#define TELNET_RETRIES 1 //don't raise above 1 until code can flush extra responses
+#define TELNET_TIMEOUT 6000 //3s
 #define TEC_STABILISE_TIME 10000 //5s
 #define LDC_ADDR1 192
 #define LDC_ADDR2 168
@@ -113,6 +114,9 @@ extern TIM_HandleTypeDef htim1;
 /* LDC status and error messages */
 #define DEBUG_CONNECTED_MESSAGE "220 Welcome DBG server!"
 #define CONTROLLER_ID "Stanford_Research_Systems,LDC501,s/n148374,ver2.46" //the expected response from the laser controller
+#define LDC_ERROR "err? @ parser"
+//#define SIMULATE_LDC
+//#define LDC_SYNTH_MESSAGE "Hercules on Micawber"
 #define TEC_CURRENT_AT_LIMIT "IMAX=1 at TECR"
 #define TEC_CURRENT_BACK_INSIDE_LIMIT "IMAX=0 at TECR"
 /* LDC commands */
@@ -128,8 +132,6 @@ extern TIM_HandleTypeDef htim1;
 #define TEC_CONTROL_MODE "TMOD" //should be 1 for constant temperature
 
 /* Variables ---------------------------------------------------------*/
-//bool telnet_initialised = 0;
-//uint8_t data[100];
 
 /* create a struct to store data */
 struct telnet_client_struct *tcTx = 0;
@@ -139,6 +141,7 @@ struct tcp_pcb *pcbTx = 0;
 u8_t ldc_comms_state = LDC_DISCONNECTED; //current connection state
 u8_t ldc_comms_retries = 0;
 char ldc_comms_message[257] = {"Initial message"}; //maximum sized message is 256 B
+char ldc_comms_command[20] = {"YOLO"};
 
 /* Function prototypes -----------------------------------------------*/
 /* Establishes connection with telnet server */
@@ -151,10 +154,10 @@ __attribute__((section(".itcm"))) bool init_ldc_tec(void);
 __attribute__((section(".itcm"))) void ldc_tx(const char str[]);
 /* Sets laser current */
 __attribute__((section(".itcm"))) void set_laser_current(const double i);
+/* Power up/down laser */
+__attribute__((section(".itcm"))) bool set_laser_state(bool laserstate);
 /* Sends a command to the LDC501 and waits for a response */
 __attribute__((section(".itcm"))) bool ldc_query(const char str[]);
-/* Me dicking about sending a few packets to see if it works */
-__attribute__((section(".itcm"))) void one_off (void);
 /* This callback will be called, when the client is connected to the server */
 __attribute__((section(".itcm"))) static err_t telnet_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err);
 /* This callback will be called, when the client receives data from the server */
@@ -252,6 +255,10 @@ bool telnet_client_init(void)
 			#endif //LDC_DEBUG
 			return (true);
 		}
+#ifdef SIMULATE_LDC
+		printf("SIMULATING successful connection to debug port\n\r");
+		return (true);
+#endif //SIMULATE_LDC
 	} else {
 		printf("[Telnet Client] ERROR: tcp_connect returned %i\n\r", ret);
 	}
@@ -289,34 +296,27 @@ bool init_ldc_tec(void)
 	ldc_tx("TMOD1\r\n"); //Constant temperature mode
 	ldc_tx("TEMP21.15\r\n"); //Set operating point of 21.15C
 	ldc_tx("TEON1\r\n"); //Turn TEC on
-	printf ("[LDC] TEC powered up - allowing 5s for TEC to stabilise");
+	printf ("TEC powered up - allowing 5s for TEC to stabilise\r\n");
 	start_timer(ETHERNET_TIMER);
 	while (check_timer(ETHERNET_TIMER) < TEC_STABILISE_TIME) {//loop here for a few seconds
 //			printf ("Spinning round loop waiting for a response");
+	    /* Ethernet handling */
+		/* This allows receipt of IMAX warning messages */
+		ethernetif_input(&gnetif);
+		sys_check_timeouts();
 	}
 	stop_timer(ETHERNET_TIMER);
 	if(ldc_query("TTRD?\r\n")){; //read laser temperature
-		printf ("[LDC] Measured temperature: %s\r\n", ldc_comms_message);
+		printf ("Measured diode temperature: %s\r\n", ldc_comms_message);
 		    return(true);
 	}
 	return(false);
 }
 
-//ldc_tx("\r\n"); //return character
-//ldc_command("\r\n"); //return character
-//	ldc_tx("uloc1\r\n"); //unlock comms
-//	ldc_tx("*idn?\r\n"); //request ID
-//
-//	ldc_tx("SMOD0\r\n"); //LD constant current mode
-//	ldc_tx("SILD159.90\r\n"); //Set laser current to 159.9mA
-//	ldc_tx("SILD?\r\n"); //Query laser diode current
-//	ldc_tx("ILOC?\r\n"); //Query laser diode current
-
-
 /* Send a string to the LDC501 over telnet */
-//void ldc_tx(const char *str, size_t lengthofstring)
 void ldc_tx(const char str[])
 {
+	strcpy(ldc_comms_command, str); //make a copy of str in case a retry is required
 	uint16_t len = strlen(str);
 	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
 	pbuf_take(tcTx->p, (char*)str, len); // copy data to pbuf
@@ -338,6 +338,26 @@ void set_laser_current(const double i)
 //	uint8_t len = sprintf (string, "SILD%.2f\n", i);
 	sprintf (string, "SILD%.2f\n", i);
 	ldc_tx(string); //send command
+}
+
+/* Power up/down laser */
+bool set_laser_state(bool laserstate)
+{
+	if (laserstate) {//power on requested
+		if (ldc_query("ILOC?")) {//check interlock status
+			printf("Response to interlock query: %s\r\n", ldc_comms_message);
+			if (ldc_comms_message[0] == "0") {
+//				(strncmp(ldc_comms_message, 0, 1) == 0)
+				printf("Bingely bon, laser on\r\n");
+//				ldc_tx("LDON1"); //turn on laser diode
+			} else {
+			printf("INTERLOCK OPEN: Can't power up laser diode\r\n");
+			}
+		}
+	} else {
+		ldc_tx("LDON0"); //turn off laser diode
+		printf("Laser diode powered down\r\n");
+	}
 }
 
 /* Send a command to the LDC501 over telnet and await response */
@@ -375,40 +395,6 @@ bool ldc_query(const char str[])
 	#endif //LDC_DEBUG
 	return (false); //failure after timeout
 }
-
-//void one_off (void) {
-//	char buf[100];
-//	uint8_t counter = 0;
-//
-//	/* Prepare the first message to send to the server */
-//	int len = sprintf (buf, "Sending telnet_client Message %d\n\0", counter);
-//
-//	/* allocate pbuf */
-//	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL);
-//	/* copy data to pbuf */
-//	pbuf_take(tcTx->p, (char*)buf, len);
-//	telnet_client_send(pcbTx, tcTx);
-//	pbuf_free(tcTx->p);
-//
-//	unsigned char tmp1[10] = {83, 116, 117, 97, 114, 116, 10}; //Stuart NEWLINE
-//	len = sprintf (buf, "%s", tmp1);
-//	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
-//	pbuf_take(tcTx->p, (char*)buf, len); // copy data to pbuf
-//	telnet_client_send(pcbTx, tcTx); //send it
-//	pbuf_free(tcTx->p); //free up the pbuf
-//
-//	float laservalue = 160.56789;
-//	len = sprintf (buf, "SILD%.2f\n", laservalue);
-//	tcTx->p = pbuf_alloc(PBUF_TRANSPORT, len , PBUF_POOL); //allocate pbuf
-//	pbuf_take(tcTx->p, (char*)buf, len); // copy data to pbuf
-//	telnet_client_send(pcbTx, tcTx); //send it
-//	pbuf_free(tcTx->p); //free up the pbuf
-//
-////	const char string = "Happy Wednesday";
-////	ldc_tx(&string, sizeof(string));
-//
-//	ldc_tx("Happy Wednesday\r\n"); //works and is processed as newline
-//}
 
 /** This callback is called, when the client is connected to the server
  * Here we will initialise few other callbacks
@@ -710,8 +696,6 @@ static void telnet_client_connection_close(struct tcp_pcb *tpcb, struct telnet_c
 
   /* close tcp connection */
   tcp_close(tpcb);
-
-//  telnet_initialised = 0;
 }
 
 /* Function to handle the incoming TCP Data */
@@ -724,15 +708,10 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
   #endif //TELNET_DEBUG
     /* get the Remote IP */
 	ip4_addr_t inIP = tpcb->remote_ip;
-	uint16_t inPort = tpcb->remote_port;
+//	uint16_t inPort = tpcb->remote_port;
 
 	/* Extract the IP */
-	char *remIP = ipaddr_ntoa(&inIP);
-
-//	tcTx->state = tc->state;
-//	tcTx->pcb = tc->pcb;
-//	tcTx->p = tc->p;
-
+//	char *remIP = ipaddr_ntoa(&inIP);
 	tcTx = tc;
 	pcbTx = tpcb;
 
@@ -742,18 +721,17 @@ static void telnet_client_handle (struct tcp_pcb *tpcb, struct telnet_client_str
 
 	/* Copy payload into a string */
 	uint16_t len = p -> len; //length of the payload
-//	char str[len+1]; //holds the payload, with capacity for terminating character
-//	memcpy(str, p -> payload, p -> len); //copy the payload across
 	memcpy(ldc_comms_message, p -> payload, p -> len); //copy the payload across
 	ldc_comms_message[len] = '\0'; //assigns null character to terminate string
-	ldc_comms_state = LDC_RESPONSE_RECEIVED;
+	if(strncmp(ldc_comms_message, LDC_ERROR, strlen(LDC_ERROR)) == 0) {
+		printf("LDC did not understand the last command\n\r");
+		printf("RETRY: %s", ldc_comms_command);
+		ldc_tx(ldc_comms_command); //retry the last command
+	} else {
+		ldc_comms_state = LDC_RESPONSE_RECEIVED;
+	}
 	#ifdef LDC_DEBUG
-//		printf("[LDC] Message: %s\n\r",str);
-//		printf("[LDC] Message received: %s",str); //no newline as one is included with the telnet message received
 		printf("[LDC] Message received: %s",ldc_comms_message); //no newline as one is included with the telnet message received
-//    	printf("String length: %u\n\r",sizeof(str));
-//    	printf("p -> len: %u\n\r",p -> len);
-//    	printf("p -> tot_len: %u\n\r",p -> tot_len);
 	#endif //LDC_DEBUG
 }
 

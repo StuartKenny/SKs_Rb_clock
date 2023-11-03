@@ -142,6 +142,7 @@ extern void one_off (void);
 extern bool init_ldc_comms(void);
 extern bool init_ldc_tec(void);
 extern void set_laser_current(const double i);
+extern bool set_laser_state(bool laserstate);
 
 /* USER CODE END PFP */
 
@@ -303,14 +304,14 @@ int main(void)
 //	timer_delay(MW_TIMER, 7000);
 //	timer_delay(MW_TIMER, 50000);
 
-//	telnet_client_init();
+	telnet_client_init();
 //	bool temp_bool;
 //	temp_bool = telnet_client_init(); //initialise telnet client
 //	if(!temp_bool) {
-	if(telnet_client_init()) {
-		printf("Failed to send telnet connection request \r\n");
-	                Error_Handler();
-	}
+//	if(!telnet_client_init()) {
+//		printf("Failed to send telnet connection request \r\n");
+//	                Error_Handler();
+//	}
 //	printf("Telnet_client_init returns: %i\r\n", temp_bool);
 	printf("Telnet connection request sent and callbacks enabled\r\n");
 
@@ -330,6 +331,7 @@ int main(void)
 	set_laser_current(ild);
 	ild = 171.45678;
 	set_laser_current(ild);
+	set_laser_state(1);
 
 //	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
 //	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
@@ -370,7 +372,8 @@ int main(void)
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
 			printf("Initialising comms with LDC501\r\n");
-			init_ldc_comms();
+			set_laser_state(1);
+//			init_ldc_comms();
 //			printf("Sending test packets\r\n");
 //			one_off(); //send a few test characters to computer
 //			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
