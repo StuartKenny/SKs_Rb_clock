@@ -33,6 +33,7 @@ extern struct netif gnetif;
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 //#define SYNTH_ENABLE
+#define TELNET_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
@@ -304,7 +305,9 @@ int main(void)
 //	timer_delay(MW_TIMER, 7000);
 //	timer_delay(MW_TIMER, 50000);
 
+	#ifdef TELNET_ENABLE
 	telnet_client_init();
+
 //	bool temp_bool;
 //	temp_bool = telnet_client_init(); //initialise telnet client
 //	if(!temp_bool) {
@@ -332,6 +335,7 @@ int main(void)
 	ild = 171.45678;
 	set_laser_current(ild);
 	set_laser_state(1);
+	#endif TELNET_ENABLE
 
 //	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
 //	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
