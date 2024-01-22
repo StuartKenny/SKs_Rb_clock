@@ -44,7 +44,12 @@ struct AttenuatorSettings
 /* USER CODE BEGIN PD */
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+<<<<<<< Updated upstream
 #define SYNTH_ENABLE
+=======
+//#define SYNTH_ENABLE
+//#define TELNET_ENABLE
+>>>>>>> Stashed changes
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
@@ -119,6 +124,12 @@ uint32_t adc_max, adc_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
 uint32_t dac_val; //for dac1 output channel 1
 
+<<<<<<< Updated upstream
+=======
+const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
+//static const double MW_DELTA = -1817; //MW offset
+static const double MW_DELTA = 1000; //MW offset
+>>>>>>> Stashed changes
 
 /* USER CODE END PV */
 
@@ -140,6 +151,7 @@ extern uint32_t init_synthesiser(const uint8_t mw_power);
 extern void set_frequency_hz(const double fo);
 extern void run_sweep();
 extern void MW_frequency_toggle (const double f_one, const double f_two);
+<<<<<<< Updated upstream
 __attribute__((section(".itcm"))) uint32_t start_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) uint32_t stop_timer(TIM_TypeDef * timer);
 __attribute__((section(".itcm"))) void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
@@ -148,6 +160,23 @@ __attribute__((section(".itcm"))) static void stop_pop();
 #ifdef ATTENUATOR_CODE
 __attribute__((section(".itcm"))) static void set_aom_atten(const struct AttenuatorSettings a);
 #endif //ATTENUATOR_CODE
+=======
+//extern uint32_t start_timer(TIM_TypeDef * timer);
+//extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
+extern uint32_t start_timer(TIM_TypeDef * timer);
+extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern uint32_t check_timer(TIM_TypeDef *timer);
+//extern static void start_pop();
+//extern static void stop_pop();
+extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
+extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
+extern const bool MW_update(void);
+extern void start_POP_calibration(const bool cal_only);
+extern void start_continuous_MW_sweep(void);
+extern uint32_t measure_POP_cycle(void);
+//extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
+>>>>>>> Stashed changes
 
 /* USER CODE END PFP */
 
@@ -559,6 +588,25 @@ int main(void)
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 //	printf("Blue button status: %u \r\n", pin_status);
 //	last_pin_status = pin_status;
+<<<<<<< Updated upstream
+=======
+
+//	timer_delay(MW_TIMER, 7000);
+//	timer_delay(MW_TIMER, 50000);
+
+//	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
+//	while (!is_telnet_initialised() && (check_timer(SWEEP_TIMER) < 15000000)) {
+//		//loop here until telnet is initialised or 15s has elapsed
+////		printf("Waiting for telnet to initialise\r\n");
+////		printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
+//	}
+//	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
+//	printf("Telnet initialisation status %u, SWEEP_TIMER value %lu \r\n", is_telnet_initialised(), check_timer(SWEEP_TIMER));
+
+//	printf("Sending test packets\r\n");
+//	one_off();
+
+>>>>>>> Stashed changes
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -584,6 +632,7 @@ int main(void)
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
+<<<<<<< Updated upstream
 			printf("Requesting FPGA POP \r\n");
 			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
 
@@ -608,6 +657,33 @@ int main(void)
 					printf("Initiating sweep.\r\n");
 					mw_sweep_started = true;
 			}
+=======
+//			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
+//
+//			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
+//			//MW_frequency_toggle (3000000010, 3000010010); //infinite loop toggling between centre of DR dip and 100kHz left of dip
+//			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
+//			//MW_frequency_toggle (3035735189, 3035736189); //infinite loop toggling between centre of DR dip and 1 kHz right of dip
+//			//set_MW_power(0x03); //set maximum MW power to improve contrast
+//			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
+//			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
+//
+//			//change the MW power each time the button is pressed, unless it's the first time round this loop
+//			if (mw_sweep_started) {
+//				++MW_power; //increase MW_power value by 1
+//				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
+//					MW_power = 0;
+//				}
+//				set_MW_power(MW_power);
+//			#ifdef MW_VERBOSE
+//				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
+//			#endif //MW_VERBOSE
+//			} else {
+//				printf("Initiating sweep.\r\n");
+//				mw_sweep_started = true;
+//				start_continuous_MW_sweep();
+//			}
+>>>>>>> Stashed changes
 			while(blue_button_status) {//remain here polling button until it is released
 				timer_delay(SLOW_TIMER, 100); //10ms delay
 				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
