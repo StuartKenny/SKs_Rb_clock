@@ -107,7 +107,7 @@ static const uint32_t SYNTH_ID = 0xC7701A;
 
 //The following timer constants are used to program a 16-bit register i.e. 65535 max
 //static const uint32_t MW_STABILISE_TIME_US = 10000; // 10ms for MW output to stabilise before signalling FPGA
-static const uint32_t MW_STABILISE_TIME_US = 5000; // 5ms for MW output to stabilise before signalling FPGA
+static const uint32_t MW_STABILISE_TIME_US = 6000; // 6ms for MW output to stabilise before signalling FPGA
 //static const uint32_t DWELL_TIME_US = 4360; // (4.36ms + 10ms MW_stabilise + measured 3.8ms processing) x 1679 steps for 30.5s ramp
 //static const uint32_t DWELL_TIME_US = 1000; // (1ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 4.8s ramp
 //static const uint32_t DWELL_TIME_US = 1180; // (1.2ms + 1ms MW_stabilise + measured 0.86ms processing) x 1679 steps for 5.1s ramp

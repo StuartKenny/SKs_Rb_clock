@@ -6,7 +6,6 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
 ../Core/Src/adc.c \
-../Core/Src/ldc501.c \
 ../Core/Src/main.c \
 ../Core/Src/mw_gen.c \
 ../Core/Src/stm32h7xx_hal_msp.c \
@@ -19,7 +18,6 @@ C_SRCS += \
 
 OBJS += \
 ./Core/Src/adc.o \
-./Core/Src/ldc501.o \
 ./Core/Src/main.o \
 ./Core/Src/mw_gen.o \
 ./Core/Src/stm32h7xx_hal_msp.o \
@@ -32,7 +30,6 @@ OBJS += \
 
 C_DEPS += \
 ./Core/Src/adc.d \
-./Core/Src/ldc501.d \
 ./Core/Src/main.d \
 ./Core/Src/mw_gen.d \
 ./Core/Src/stm32h7xx_hal_msp.d \
@@ -51,7 +48,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/adc.cyclo ./Core/Src/adc.d ./Core/Src/adc.o ./Core/Src/adc.su ./Core/Src/ldc501.cyclo ./Core/Src/ldc501.d ./Core/Src/ldc501.o ./Core/Src/ldc501.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/mw_gen.cyclo ./Core/Src/mw_gen.d ./Core/Src/mw_gen.o ./Core/Src/mw_gen.su ./Core/Src/stm32h7xx_hal_msp.cyclo ./Core/Src/stm32h7xx_hal_msp.d ./Core/Src/stm32h7xx_hal_msp.o ./Core/Src/stm32h7xx_hal_msp.su ./Core/Src/stm32h7xx_it.cyclo ./Core/Src/stm32h7xx_it.d ./Core/Src/stm32h7xx_it.o ./Core/Src/stm32h7xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32h7xx.cyclo ./Core/Src/system_stm32h7xx.d ./Core/Src/system_stm32h7xx.o ./Core/Src/system_stm32h7xx.su ./Core/Src/template.cyclo ./Core/Src/template.d ./Core/Src/template.o ./Core/Src/template.su ./Core/Src/timers.cyclo ./Core/Src/timers.d ./Core/Src/timers.o ./Core/Src/timers.su
+	-$(RM) ./Core/Src/adc.cyclo ./Core/Src/adc.d ./Core/Src/adc.o ./Core/Src/adc.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/mw_gen.cyclo ./Core/Src/mw_gen.d ./Core/Src/mw_gen.o ./Core/Src/mw_gen.su ./Core/Src/stm32h7xx_hal_msp.cyclo ./Core/Src/stm32h7xx_hal_msp.d ./Core/Src/stm32h7xx_hal_msp.o ./Core/Src/stm32h7xx_hal_msp.su ./Core/Src/stm32h7xx_it.cyclo ./Core/Src/stm32h7xx_it.d ./Core/Src/stm32h7xx_it.o ./Core/Src/stm32h7xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32h7xx.cyclo ./Core/Src/system_stm32h7xx.d ./Core/Src/system_stm32h7xx.o ./Core/Src/system_stm32h7xx.su ./Core/Src/template.cyclo ./Core/Src/template.d ./Core/Src/template.o ./Core/Src/template.su ./Core/Src/timers.cyclo ./Core/Src/timers.d ./Core/Src/timers.o ./Core/Src/timers.su
 
 .PHONY: clean-Core-2f-Src
 

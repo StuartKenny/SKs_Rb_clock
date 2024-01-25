@@ -32,6 +32,7 @@ extern struct netif gnetif;
 /* USER CODE BEGIN PD */
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+//#define ETHERNET_FOR_LDC501
 //#define SYNTH_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
@@ -93,13 +94,14 @@ const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
 //static const double MW_DELTA = -1817; //MW offset
 static const double MW_DELTA = 1000; //MW offset
 
+#ifdef ETHERNET_FOR_LDC501
 double ild = 160; //laser diode current, 160mA initial value
+#endif //ETHERNET_FOR_LDC501
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MPU_Initialize(void);
 static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_LPTIM1_Init(void);
@@ -136,6 +138,7 @@ extern void start_continuous_MW_sweep(void);
 extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
 
+#ifdef ETHERNET_FOR_LDC501
 /* Telnet prototypes*/
 extern bool telnet_client_init(void);
 extern void one_off (void);
@@ -143,6 +146,7 @@ extern bool init_ldc_comms(void);
 extern bool init_ldc_tec(void);
 extern void set_laser_current(const double i);
 extern bool set_laser_state(bool laserstate);
+#endif //ETHERNET_FOR_LDC501
 
 /* USER CODE END PFP */
 
@@ -174,6 +178,10 @@ int main(void)
 
   /* USER CODE END 1 */
 
+  /* MPU Configuration--------------------------------------------------------*/
+  MPU_Config();
+/* Enable the CPU Cache */
+
   /* Enable I-Cache---------------------------------------------------------*/
   SCB_EnableICache();
 
@@ -184,9 +192,6 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-
-  /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
 
   /* USER CODE BEGIN Init */
 
@@ -304,6 +309,7 @@ int main(void)
 //	timer_delay(MW_TIMER, 7000);
 //	timer_delay(MW_TIMER, 50000);
 
+#ifdef ETHERNET_FOR_LDC501
 	telnet_client_init();
 //	bool temp_bool;
 //	temp_bool = telnet_client_init(); //initialise telnet client
@@ -344,6 +350,7 @@ int main(void)
 
 //	printf("Sending test packets\r\n");
 //	one_off();
+#endif //ETHERNET_FOR_LDC501
 
   /* USER CODE END 2 */
 
@@ -371,13 +378,16 @@ int main(void)
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
+
+#ifdef ETHERNET_FOR_LDC501
 			printf("Initialising comms with LDC501\r\n");
 			set_laser_state(1);
 //			init_ldc_comms();
 //			printf("Sending test packets\r\n");
 //			one_off(); //send a few test characters to computer
 //			HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning SMA output low
-//
+#endif //ETHERNET_FOR_LDC501
+
 //			/* CODE FOR CHARACTERISING MW GENERATOR FREQUENCY SETTLING TIME */
 //			//MW_frequency_toggle (3000000010, 3000010010); //infinite loop toggling between centre of DR dip and 100kHz left of dip
 //			//MW_frequency_toggle (3035735189, 3035734189); //infinite loop toggling between centre of DR dip and 1kHz left of dip
@@ -386,21 +396,21 @@ int main(void)
 //			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
 //			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
 //
-//			//change the MW power each time the button is pressed, unless it's the first time round this loop
-//			if (mw_sweep_started) {
-//				++MW_power; //increase MW_power value by 1
-//				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
-//					MW_power = 0;
-//				}
-//				set_MW_power(MW_power);
-//			#ifdef MW_VERBOSE
-//				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
-//			#endif //MW_VERBOSE
-//			} else {
-//				printf("Initiating sweep.\r\n");
-//				mw_sweep_started = true;
-//				start_continuous_MW_sweep();
-//			}
+			//change the MW power each time the button is pressed, unless it's the first time round this loop
+			if (mw_sweep_started) {
+				++MW_power; //increase MW_power value by 1
+				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
+					MW_power = 0;
+				}
+				set_MW_power(MW_power);
+			#ifdef MW_VERBOSE
+				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
+			#endif //MW_VERBOSE
+			} else {
+				printf("Initiating sweep.\r\n");
+				mw_sweep_started = true;
+				start_continuous_MW_sweep();
+			}
 			while(blue_button_status) {//remain here polling button until it is released
 				timer_delay(SLOW_TIMER, 100); //10ms delay
 				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
@@ -417,10 +427,12 @@ int main(void)
 		}
 		MW_update();
 
+#ifdef ETHERNET_FOR_LDC501
 	    /* Ethernet handling */
 		ethernetif_input(&gnetif);
 		sys_check_timeouts();
 //		printf("Ethernet loop.\r\n");
+#endif //ETHERNET_FOR_LDC501
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -464,7 +476,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 80;
+  RCC_OscInitStruct.PLL.PLLN = 96;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;

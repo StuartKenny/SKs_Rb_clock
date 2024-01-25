@@ -234,9 +234,6 @@ static void low_level_init(struct netif *netif)
   /* Initialize the LAN8742 ETH PHY */
   LAN8742_Init(&LAN8742);
 
-  /* Stuart's workaround for comms failure after reset */
-  LAN8742_StartAutoNego(&LAN8742);
-
   if (hal_eth_init_status == HAL_OK)
   {
   /* Get link state */
