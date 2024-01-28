@@ -94,16 +94,13 @@
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.objcopy.symbolsrec.1942928272" name="MCU Output Converter Motorola S-rec with symbols" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.objcopy.symbolsrec"/>
 						</toolChain>
 					</folderInfo>
-					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.567587299" name="ldc501.c" rcbsApplicability="disable" resourcePath="Core/Src/ldc501.c" toolsToInvoke="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.125752003.19965926">
-						<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.125752003.19965926" name="MCU GCC Compiler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.125752003"/>
-					</fileInfo>
 					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.1773034216" name="telnet_client.h" rcbsApplicability="disable" resourcePath="Core/Inc/telnet_client.h" toolsToInvoke=""/>
 					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.1886838148" name="ldc501.h" rcbsApplicability="disable" resourcePath="Core/Inc/ldc501.h" toolsToInvoke=""/>
 					<sourceEntries>
 						<entry excluding="Src/ldc501.c|Inc/ldc501.h|Inc/telnet_client.h|Src/telnet_client.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="LWIP"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
