@@ -14,6 +14,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "mw_gen.h"
+//#include "laserlock.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -241,12 +242,21 @@ int main(void)
 
 	/* Start the DAC and zero its output */
 	if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
-		printf("Failure to initialise DAC \r\n");
+		printf("Failure to initialise DAC channel 1 \r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output to 1.00V \r\n");
+	if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_2) != HAL_OK) {
+		printf("Failure to initialise DAC channel 2 \r\n");
+		Error_Handler();
+	}
+	printf("Setting DAC output 1 to 1.00V \r\n");
 	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1241) != HAL_OK){
-			printf("DAC setup failed!\r\n");
+			printf("DAC setup failed for channel 1!\r\n");
+		Error_Handler();
+	}
+	printf("Setting DAC output 2 to 0.5V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 621) != HAL_OK){
+			printf("DAC setup failed for channel 2!\r\n");
 		Error_Handler();
 	}
 
