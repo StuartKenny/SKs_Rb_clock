@@ -34,7 +34,7 @@ extern struct netif gnetif;
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 //#define ETHERNET_FOR_LDC501
-//#define SYNTH_ENABLE
+#define SYNTH_ENABLE
 #define POP_START_PULSE
 //#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
@@ -77,7 +77,7 @@ extern uint32_t _eitcm;
 static volatile bool mw_sweep_started = false;
 volatile bool blue_button_status; //blue button state. 1 when pressed
 //static bool last_pin_status; //previous blue button state
-volatile uint16_t sample_count=0; //counts number of times the sample line drives the ADC trigger high
+volatile uint16_t sample_count=0; //counts number of times the sample line drives the ADC trigger high, updated after conversion is complete
 uint32_t POP_period_us=0; //length of POP cycle in us
 
 static uint8_t MW_power = 0x2; // Initial MW power i.e. LO2GAIN
@@ -254,8 +254,8 @@ int main(void)
 			printf("DAC setup failed for channel 1!\r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output 2 to 0.5V \r\n");
-	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 621) != HAL_OK){
+	printf("Setting DAC output 2 to 1.5V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 1862) != HAL_OK){
 			printf("DAC setup failed for channel 2!\r\n");
 		Error_Handler();
 	}
