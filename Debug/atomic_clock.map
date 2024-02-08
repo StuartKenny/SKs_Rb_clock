@@ -305,27 +305,165 @@ Discarded input sections
  .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
  .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
  .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
+ .group         0x0000000000000000        0xc ./Core/Src/laserlock.o
  .text          0x0000000000000000        0x0 ./Core/Src/laserlock.o
  .data          0x0000000000000000        0x0 ./Core/Src/laserlock.o
  .bss           0x0000000000000000        0x0 ./Core/Src/laserlock.o
  .rodata.LASER_STEP
                 0x0000000000000000        0x2 ./Core/Src/laserlock.o
- .data.LASER_MOD_VALUE
+ .bss.LASER_MOD_VALUE
                 0x0000000000000000        0x2 ./Core/Src/laserlock.o
- .debug_info    0x0000000000000000       0xa8 ./Core/Src/laserlock.o
+ .bss.F2_MOD_VALUE
+                0x0000000000000000        0x2 ./Core/Src/laserlock.o
+ .bss.F3_MOD_VALUE
+                0x0000000000000000        0x2 ./Core/Src/laserlock.o
+ .bss.max_adc_val
+                0x0000000000000000        0x4 ./Core/Src/laserlock.o
+ .data.min_adc_val
+                0x0000000000000000        0x4 ./Core/Src/laserlock.o
+ .debug_info    0x0000000000000000      0x120 ./Core/Src/laserlock.o
  .debug_abbrev  0x0000000000000000       0x50 ./Core/Src/laserlock.o
  .debug_aranges
                 0x0000000000000000       0x18 ./Core/Src/laserlock.o
- .debug_macro   0x0000000000000000       0x6d ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x31f ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000      0xac6 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x256 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x2e ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x3b ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000       0x22 ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000       0x8e ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000       0x51 ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000      0x103 ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000       0x6a ./Core/Src/laserlock.o
  .debug_macro   0x0000000000000000      0x1df ./Core/Src/laserlock.o
- .debug_line    0x0000000000000000      0x41a ./Core/Src/laserlock.o
- .debug_str     0x0000000000000000     0x3d65 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x1c ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x22 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0xfb ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000     0x1305 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x11f ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x27 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000    0x25882 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x6d ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000     0x3d5d ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x174 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x61 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x29 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x43 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x34 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x16 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x43 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x34 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x10 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x58 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x8e ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x1c ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x177 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x369 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x19b ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x5d ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000     0x2382 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000     0x102c ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x154 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x114 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x3b2 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0xac ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x72d ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x228 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x66 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x3bb ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0xa80 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x129 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x3e4 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x275 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000     0x1044 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x6cc ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x36e ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x184 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0xd8 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x3ca ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x408 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x51 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000     0x1605 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x4a ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x22c ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x67 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0xa5 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x295 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x1c4 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x25e ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0x35 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0xaf3 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x29f ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x693 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000       0xa6 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x5a0 ./Core/Src/laserlock.o
+ .debug_macro   0x0000000000000000      0x15a ./Core/Src/laserlock.o
+ .debug_line    0x0000000000000000      0x9ae ./Core/Src/laserlock.o
+ .debug_str     0x0000000000000000   0x18a68b ./Core/Src/laserlock.o
  .comment       0x0000000000000000       0x44 ./Core/Src/laserlock.o
  .ARM.attributes
                 0x0000000000000000       0x32 ./Core/Src/laserlock.o
