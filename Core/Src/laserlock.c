@@ -50,3 +50,5 @@ extern uint32_t adc_val; //used to store adc3 readings
 HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
 //laser_tuning must be high for probe on and MW off
 HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
+
+
