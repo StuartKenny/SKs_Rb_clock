@@ -40,6 +40,9 @@ extern struct netif gnetif;
 #define MW_VERBOSE
 #define NO_SCOPE_SYNC 0
 #define ADD_SCOPE_SYNC_TIME 0
+#define ADC_SAMPLE_POWER 4 // Must be a natural number (zero or positive integer)
+#define ADC_SAMPLES 4 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
+#define DIRECT_ADC_TO_DAC
 
 /* USER CODE END PD */
 
@@ -85,7 +88,11 @@ static uint8_t MW_power = 0x2; // Initial MW power i.e. LO2GAIN
 //max is +5dBm output, min is -1dBm out.
 //NOTE - these values are measured and not consistent with datasheet
 
-uint32_t adc_val; //used to store adc3 readings
+/* ADC sample storage */
+uint32_t adc_val, adc_averaged_val; //used to store adc3 readings
+uint32_t adc_readings[ADC_SAMPLES]; //an array for the requisite number of samples
+uint16_t adc_sample_no = 0; //for storing a rotating pointer to the array
+uint64_t adc_readings_total = 0; //for storing the total of N samples
 #ifdef QUANTIFY_ADC_NOISE
 uint32_t adc_max, adc_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
@@ -120,7 +127,7 @@ static void MX_TIM4_Init(void);
 extern uint32_t set_MW_power (const uint8_t mw_power);
 extern uint32_t init_synthesiser(const uint8_t mw_power);
 extern void set_frequency_hz(const double fo);
-extern void run_sweep();
+extern void run_sweep(void);
 extern void MW_frequency_toggle (const double f_one, const double f_two);
 //extern uint32_t start_timer(TIM_TypeDef * timer);
 //extern uint32_t stop_timer(TIM_TypeDef * timer);
@@ -1232,11 +1239,17 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+/**
+  * @brief  Function called when ADC conversion complete. Stores an averaged ADC value
+  * Should assume that that there's garbage in the adc_readings array until populated
+  * but that the adc_readings_total and adc_sample_no are initialised correctly
+  * @param  Pointer to ADC (not currently used internally)
+  * @retval None
+  */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
   adc_val = HAL_ADC_GetValue(&hadc3);
   //printf("ADC value: %lu \r\n", adc_val);
-  dac_val = adc_val >> 4;
   sample_count++;
 #ifdef QUANTIFY_ADC_NOISE
   if (adc_val < adc_min) {
@@ -1249,10 +1262,50 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   }
   //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
 #endif //QUANTIFY_ADC_NOISE
-  //printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
-  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
-  //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2048);
+	if (ADC_SAMPLE_POWER == 0) { //no averaging required
+		adc_averaged_val = adc_val
+	} else { //averaging in operation
+		adc_readings_total = adc_readings_total + adc_val;
+		if (sample_count >= ADC_SAMPLES) {//if the sample buffer is full
+			adc_readings_total = adc_readings_total - adc_readings[adc_sample_no]; //subtract the expired value from the total
+			adc_averaged_val = adc_readings_total >> ADC_SAMPLE_POWER; //truncate as a cycle-efficient division
+		}
+		adc_readings[adc_sample_no] = adc_val;
+		adc_sample_no++;
+		if (adc_sample_no >= ADC_SAMPLES) adc_sample_no = 0; //set back to zero if loop complete
+
+	}
+	#ifdef DIRECT_ADC_TO_DAC
+	dac_val = adc_averaged_val >> 4;
+	//printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
+	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+	#endif //DIRECT_ADC_TO_DAC
 }
+
+//uint32_t adc_val, adc_averaged_val; //used to store adc3 readings
+//uint32_t adc_readings[ADC_SAMPLES]; //an array for the requisite number of samples
+//uint16_t adc_sample_no; //for storing a rotating pointer to the array
+//uint64_t adc_readings_total = 0; //for storing the total of N samples
+
+/**
+  * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
+  * @param  Centre frequency in Hz
+  * @param  Span in Hz
+  * @param  POP cycles per point
+  * @param  Number of points
+  * @param	POP_period in us
+  * @retval Success/failure or early termination
+  */
+bool ADC_averaged_sample(void)
+{
+	/* This function returns TRUE _ONCE_ if adc_averaged_val is valid
+	 */
+
+	adc_sample_no++;
+
+}
+
+
 
 /* USER CODE END 4 */
 
