@@ -40,7 +40,7 @@ extern struct netif gnetif;
 #define MW_VERBOSE
 #define NO_SCOPE_SYNC 0
 #define ADD_SCOPE_SYNC_TIME 0
-#define ADC_SAMPLE_POWER 4 // Must be a natural number (zero or positive integer)
+#define ADC_SAMPLE_POWER 2 // Must be a natural number (zero or positive integer)
 #define ADC_SAMPLES 4 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
 #define DIRECT_ADC_TO_DAC
 
@@ -89,10 +89,11 @@ static uint8_t MW_power = 0x2; // Initial MW power i.e. LO2GAIN
 //NOTE - these values are measured and not consistent with datasheet
 
 /* ADC sample storage */
-uint32_t adc_val, adc_averaged_val; //used to store adc3 readings
+uint32_t adc_val, adc_averaged_val; //used to store adc3 readings (16-bit value in a 32-bit reg)
 uint32_t adc_readings[ADC_SAMPLES]; //an array for the requisite number of samples
 uint16_t adc_sample_no = 0; //for storing a rotating pointer to the array
-uint64_t adc_readings_total = 0; //for storing the total of N samples
+uint32_t adc_readings_total = 0; //for storing the total of N samples
+bool adc_average_updated = false; //allows polling without needing to compare previous values
 #ifdef QUANTIFY_ADC_NOISE
 uint32_t adc_max, adc_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
@@ -140,11 +141,13 @@ extern uint32_t check_timer(TIM_TypeDef *timer);
 extern void test_call(void);
 extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
 extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
+extern void stop_MW_operation(void);
 extern const bool MW_update(void);
 extern void start_POP_calibration(const bool cal_only);
 extern void start_continuous_MW_sweep(void);
 extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
+__attribute__((section(".itcm"))) void reset_adc_samples(void);
 
 #ifdef ETHERNET_FOR_LDC501
 /* Telnet prototypes*/
@@ -247,7 +250,7 @@ int main(void)
 		Error_Handler();
 	}
 
-	/* Start the DAC and zero its output */
+	/* Start the DAC and zero its outputs */
 	if (HAL_DAC_Start(&hdac1, DAC_CHANNEL_1) != HAL_OK) {
 		printf("Failure to initialise DAC channel 1 \r\n");
 		Error_Handler();
@@ -267,13 +270,10 @@ int main(void)
 		Error_Handler();
 	}
 
-	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
-
-	/* Spare SMA pin */
-//	SPARE_OUT_GPIO_Port, SPARE_OUT_Pin
-//	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_SET); // Sets spare SMA output high
-//	printf("Setting spare SMA output high \r\n");
-//	HAL_GPIO_WritePin(SPARE_OUT_GPIO_Port, SPARE_OUT_Pin, GPIO_PIN_RESET); // Sets spare SMA output low
+	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
+//	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
+	//MW_invalid low to ensure sample pulse is generated - not strictly needed in FPGA state 0
+	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
 
 	/* Fire up the ADC
 	 * external trigger, single conversion selected in ioc file
@@ -281,6 +281,11 @@ int main(void)
 	 */
 	if(HAL_ADCEx_Calibration_Start(&hadc3, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK){
 		printf("ADC calibration failure \r\n");
+		Error_Handler();
+	}
+	if ((2^ADC_SAMPLE_POWER) != ADC_SAMPLES) {
+		printf("ADC sampling constants incorrectly initialised \r\n");
+		printf("2 ^ ADC_SAMPLE_POWER (%u) does not equal ADC_SAMPLES (%u)\r\n", ADC_SAMPLE_POWER, ADC_SAMPLES);
 		Error_Handler();
 	}
 	//Start the ADC with interrupts enabled
@@ -1248,7 +1253,7 @@ static void MX_GPIO_Init(void)
   */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-  adc_val = HAL_ADC_GetValue(&hadc3);
+  adc_val = 0x00FF & HAL_ADC_GetValue(&hadc3); //ensure that only 16 bits are recorded
   //printf("ADC value: %lu \r\n", adc_val);
   sample_count++;
 #ifdef QUANTIFY_ADC_NOISE
@@ -1263,49 +1268,70 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
 #endif //QUANTIFY_ADC_NOISE
 	if (ADC_SAMPLE_POWER == 0) { //no averaging required
-		adc_averaged_val = adc_val
+		adc_averaged_val = adc_val;
+		adc_average_updated = true;
 	} else { //averaging in operation
 		adc_readings_total = adc_readings_total + adc_val;
 		if (sample_count >= ADC_SAMPLES) {//if the sample buffer is full
 			adc_readings_total = adc_readings_total - adc_readings[adc_sample_no]; //subtract the expired value from the total
 			adc_averaged_val = adc_readings_total >> ADC_SAMPLE_POWER; //truncate as a cycle-efficient division
+			adc_average_updated = true;
 		}
 		adc_readings[adc_sample_no] = adc_val;
 		adc_sample_no++;
 		if (adc_sample_no >= ADC_SAMPLES) adc_sample_no = 0; //set back to zero if loop complete
-
 	}
 	#ifdef DIRECT_ADC_TO_DAC
-	dac_val = adc_averaged_val >> 4;
-	//printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+	if(adc_average_updated) {
+		dac_val = adc_averaged_val >> 4;
+		//printf("ADC value: %lu, DAC value: %lu \r\n", adc_val, dac_val);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_val);
+	}
 	#endif //DIRECT_ADC_TO_DAC
 }
 
-//uint32_t adc_val, adc_averaged_val; //used to store adc3 readings
-//uint32_t adc_readings[ADC_SAMPLES]; //an array for the requisite number of samples
-//uint16_t adc_sample_no; //for storing a rotating pointer to the array
-//uint64_t adc_readings_total = 0; //for storing the total of N samples
-
 /**
-  * @brief  Calculate MW sweep parameters based on number of points and POP cycles per step
-  * @param  Centre frequency in Hz
-  * @param  Span in Hz
-  * @param  POP cycles per point
-  * @param  Number of points
-  * @param	POP_period in us
-  * @retval Success/failure or early termination
+  * @brief  Clears the ADC sample buffer
+  * @param  None
+  * @retval None
   */
-bool ADC_averaged_sample(void)
+void reset_adc_samples (void)
 {
-	/* This function returns TRUE _ONCE_ if adc_averaged_val is valid
-	 */
-
-	adc_sample_no++;
-
+/* No need to reset the adc_readings array */
+	adc_average_updated = false; //signals to other functions that adc_averaged_val shouldn't be read
+	adc_sample_no = 0; //reset cyclical sample counter
+	adc_readings_total = 0; //zeroes the total counter
+	sample_count=0; //reset the main ADC sample counter
 }
 
+/**
+  * @brief  Preparation for tuning laser frequency
+  * @param  None
+  * @retval None
+  */
+void system_mode_laser_tuning (void)
+{
+	stop_MW_operation(); //resets MW timers, sets MW_invalid pin low (to ensure ADC sample pulse) and sets correct MW state
+	//MW_invalid low to ensure sample pulse is generated - not strictly needed in FPGA state 0
+	//HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
+	//laser_tuning (FPGA input pin 18) must be high for probe on and MW off
+	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
+	reset_adc_samples(); //reset ADC samples including sample count
+}
 
+/**
+  * @brief  Preparation for POP inc. MW tuning
+  * @param  None
+  * @retval None
+  */
+void system_mode_MW_tuning (void)
+{
+	//MW_invalid low to ensure sample pulse is generated - not strictly needed in FPGA state 0
+	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
+	//laser_tuning (FPGA input pin 18) must be low for POP
+	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
+	reset_adc_samples(); //reset ADC samples including sample count
+}
 
 /* USER CODE END 4 */
 

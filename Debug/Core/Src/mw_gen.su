@@ -13,5 +13,5 @@
 ../Core/Src/mw_gen.c:834:19:start_MW_sweep	16	static
 ../Core/Src/mw_gen.c:871:6:start_continuous_MW_sweep	8	static
 ../Core/Src/mw_gen.c:880:12:MW_update	48	static
-../Core/Src/mw_gen.c:1089:6:MW_frequency_toggle	72	static
-../Core/Src/mw_gen.c:1131:7:set_SDO_output	24	static
+../Core/Src/mw_gen.c:1090:6:MW_frequency_toggle	72	static
+../Core/Src/mw_gen.c:1132:7:set_SDO_output	24	static

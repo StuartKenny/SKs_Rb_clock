@@ -184,7 +184,6 @@ uint32_t measure_POP_cycle(void){
 		cycle_count++;
 	}
 
-	uint32_t total_period = check_timer(MW_TIMER);
 	period = (float)(check_timer(MW_TIMER)) / iterations + 0.5;
 	stop_timer(MW_TIMER);
 	#ifdef TIMER_VERBOSE
