@@ -1,0 +1,3 @@
+../Core/Src/laserlock.c:89:6:startlaserlockfunc1	16	static
+../Core/Src/laserlock.c:115:6:stop_laser_tuning	8	static
+../Core/Src/laserlock.c:126:12:laser_update	16	static

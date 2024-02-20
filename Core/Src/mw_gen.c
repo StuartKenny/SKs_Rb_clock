@@ -168,6 +168,7 @@ __attribute__((section(".itcm"))) static const uint32_t calculate_k(const double
 __attribute__((section(".itcm"))) void start_POP_calibration(const bool cal_only);
 __attribute__((section(".itcm"))) static const bool start_MW_sweep(const bool single_sweep);
 __attribute__((section(".itcm"))) void start_continuous_MW_sweep(void);
+__attribute__((section(".itcm"))) void stop_MW_operation(void);
 __attribute__((section(".itcm"))) const bool MW_update(void);
 //__attribute__((section(".itcm"))) void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
 //__attribute__((section(".itcm"))) static const uint32_t conclude_MW_calibration_sweep(void);

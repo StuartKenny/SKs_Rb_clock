@@ -94,9 +94,6 @@
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.objcopy.symbolsrec.1942928272" name="MCU Output Converter Motorola S-rec with symbols" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.objcopy.symbolsrec"/>
 						</toolChain>
 					</folderInfo>
-					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.1202491573" name="laserlock.c" rcbsApplicability="disable" resourcePath="Core/Src/laserlock.c" toolsToInvoke="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.125752003.1064434722">
-						<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.125752003.1064434722" name="MCU GCC Compiler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.125752003"/>
-					</fileInfo>
 					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.760794352" name="laserlock.h" rcbsApplicability="disable" resourcePath="Core/Inc/laserlock.h" toolsToInvoke=""/>
 					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.1773034216" name="telnet_client.h" rcbsApplicability="disable" resourcePath="Core/Inc/telnet_client.h" toolsToInvoke=""/>
 					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.439660167.1886838148" name="ldc501.h" rcbsApplicability="disable" resourcePath="Core/Inc/ldc501.h" toolsToInvoke=""/>

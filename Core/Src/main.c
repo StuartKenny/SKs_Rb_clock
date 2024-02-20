@@ -276,7 +276,7 @@ int main(void)
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
 
 	/* Fire up the ADC
-	 * external trigger, single conversion selected in ioc file
+	 * external trigger, single conversion selected in .ioc file
 	 * calibrate ADC for better accuracy and start it w/ interrupt
 	 */
 	if(HAL_ADCEx_Calibration_Start(&hadc3, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK){
