@@ -95,8 +95,9 @@ uint16_t adc_sample_no = 0; //for storing a rotating pointer to the array
 uint32_t adc_readings_total = 0; //for storing the total of N samples
 bool adc_average_updated = false; //allows polling without needing to compare previous values
 #ifdef QUANTIFY_ADC_NOISE
-uint32_t adc_max, adc_min; //used to store adc3 readings
+uint32_t adc_raw_max, adc_raw_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
+uint32_t adc_averaged_max, adc_averaged_min; //used to store adc3 readings
 uint32_t dac_val; //for dac1 output channel 1
 
 const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
@@ -125,19 +126,18 @@ static void MX_TIM5_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
+/* TIMER functions */
+extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
+extern uint32_t start_timer(TIM_TypeDef * timer);
+extern uint32_t stop_timer(TIM_TypeDef * timer);
+extern uint32_t check_timer(TIM_TypeDef *timer);
+
+/* MW functions */
 extern uint32_t set_MW_power (const uint8_t mw_power);
 extern uint32_t init_synthesiser(const uint8_t mw_power);
 extern void set_frequency_hz(const double fo);
 extern void run_sweep(void);
 extern void MW_frequency_toggle (const double f_one, const double f_two);
-//extern uint32_t start_timer(TIM_TypeDef * timer);
-//extern uint32_t stop_timer(TIM_TypeDef * timer);
-extern void timer_delay(TIM_TypeDef *timer, uint32_t delay_us);
-extern uint32_t start_timer(TIM_TypeDef * timer);
-extern uint32_t stop_timer(TIM_TypeDef * timer);
-extern uint32_t check_timer(TIM_TypeDef *timer);
-//extern static void start_pop();
-//extern static void stop_pop();
 extern void test_call(void);
 extern bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_step, const uint32_t num_points_req);
 extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
@@ -148,6 +148,14 @@ extern void start_continuous_MW_sweep(void);
 extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
 __attribute__((section(".itcm"))) void reset_adc_samples(void);
+/* LASER control functions */
+extern void start_laser_tuning(void);
+extern void start_laser_ramp(void);
+extern void stop_laser_tuning(void);
+extern const bool laser_update(void);
+/* Simon's dodgy functions */
+//extern static void start_pop();
+//extern static void stop_pop();
 
 #ifdef ETHERNET_FOR_LDC501
 /* Telnet prototypes*/
@@ -295,8 +303,10 @@ int main(void)
 	}
 	printf("ADC calibrated successfully and interrupt callback enabled \r\n");
 	#ifdef QUANTIFY_ADC_NOISE
-		adc_max = 0;
-		adc_min = 60000;
+		adc_raw_max = 0;
+		adc_averaged_max = 0;
+		adc_averaged_min = 60000;
+		adc_raw_min = 60000;
 	#endif //QUANTIFY_ADC_NOISE
 
 	/* Calculate the MW sweep settings
@@ -1256,18 +1266,18 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   adc_val = 0x00FF & HAL_ADC_GetValue(&hadc3); //ensure that only 16 bits are recorded
   //printf("ADC value: %lu \r\n", adc_val);
   sample_count++;
-#ifdef QUANTIFY_ADC_NOISE
-  if (adc_val < adc_min) {
-	  adc_min = adc_val;
-	  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
-  }
-  if (adc_val > adc_max) {
-	  adc_max = adc_val;
-	  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
-  }
-  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
-#endif //QUANTIFY_ADC_NOISE
 	if (ADC_SAMPLE_POWER == 0) { //no averaging required
+	#ifdef QUANTIFY_ADC_NOISE
+	  if (adc_val < adc_min) {
+		  adc_min = adc_val;
+		  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+	  }
+	  if (adc_val > adc_max) {
+		  adc_max = adc_val;
+		  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+	  }
+	  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+	#endif //QUANTIFY_ADC_NOISE
 		adc_averaged_val = adc_val;
 		adc_average_updated = true;
 	} else { //averaging in operation
@@ -1280,6 +1290,26 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		adc_readings[adc_sample_no] = adc_val;
 		adc_sample_no++;
 		if (adc_sample_no >= ADC_SAMPLES) adc_sample_no = 0; //set back to zero if loop complete
+		#ifdef QUANTIFY_ADC_NOISE
+		  if (adc_val < adc_min) {
+			  adc_min = adc_val;
+		  }
+		  if (adc_val > adc_max) {
+			  adc_max = adc_val;
+		  }
+		  if (adc_average_updated & (adc_averaged_val < adc_averaged_min)) {
+			  adc_averaged_min = adc_averaged_val;
+			  printf("%u ADC samples\r\n", ADC_SAMPLES);
+			  printf("Raw ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+			  printf("ADC average reading: %lu, max: %lu, min: %lu \r\n", adc_averaged_val, adc_averaged_max, adc_averaged_min);
+		  }
+		  if (adc_average_updated & (adc_averaged_val > adc_averaged_max)) {
+			  adc_averaged_max = adc_averaged_val;
+			  printf("%u ADC samples\r\n", ADC_SAMPLES);
+			  printf("Raw ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+			  printf("ADC average reading: %lu, max: %lu, min: %lu \r\n", adc_averaged_val, adc_averaged_max, adc_averaged_min);
+			}
+		#endif //QUANTIFY_ADC_NOISE
 	}
 	#ifdef DIRECT_ADC_TO_DAC
 	if(adc_average_updated) {

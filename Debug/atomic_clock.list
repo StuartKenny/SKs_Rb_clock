@@ -31,23 +31,23 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY
  13 .comment      00000043  00000000  00000000  0004025a  2**0
                   CONTENTS, READONLY
- 14 .debug_info   000393e6  00000000  00000000  0004029d  2**0
+ 14 .debug_info   00039408  00000000  00000000  0004029d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_abbrev 00007491  00000000  00000000  00079683  2**0
+ 15 .debug_abbrev 00007491  00000000  00000000  000796a5  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_aranges 000029c8  00000000  00000000  00080b18  2**3
+ 16 .debug_aranges 000029c8  00000000  00000000  00080b38  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_rnglists 00002159  00000000  00000000  000834e0  2**0
+ 17 .debug_rnglists 00002159  00000000  00000000  00083500  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_macro  0001199b  00000000  00000000  00085639  2**0
+ 18 .debug_macro  0001199b  00000000  00000000  00085659  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .debug_line   00040aec  00000000  00000000  00096fd4  2**0
+ 19 .debug_line   00040aee  00000000  00000000  00096ff4  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 20 .debug_str    001a958b  00000000  00000000  000d7ac0  2**0
+ 20 .debug_str    001a95ac  00000000  00000000  000d7ae2  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_frame  0000c060  00000000  00000000  0028104c  2**2
+ 21 .debug_frame  0000c060  00000000  00000000  00281090  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 22 .debug_line_str 00000052  00000000  00000000  0028d0ac  2**0
+ 22 .debug_line_str 00000051  00000000  00000000  0028d0f0  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .itcm:
@@ -123,12 +123,12 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
       5a:	2200      	movs	r2, #0
       5c:	f44f 7180 	mov.w	r1, #256	; 0x100
       60:	4830      	ldr	r0, [pc, #192]	; (124 <synth_writereg+0xec>)
-      62:	f001 fa91 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+      62:	f001 fa8d 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 0); // Take SEN low to indicate we are sending data
       66:	2200      	movs	r2, #0
       68:	f44f 6100 	mov.w	r1, #2048	; 0x800
       6c:	482d      	ldr	r0, [pc, #180]	; (124 <synth_writereg+0xec>)
-      6e:	f001 fa8b 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+      6e:	f001 fa87 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 
 	/* Clock in the data */
 	for (uint32_t i = 0; i < SYNTH_SPI_BITS; i++) {
@@ -158,24 +158,24 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
       9a:	461a      	mov	r2, r3
       9c:	f44f 7100 	mov.w	r1, #512	; 0x200
       a0:	4820      	ldr	r0, [pc, #128]	; (124 <synth_writereg+0xec>)
-      a2:	f001 fa71 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+      a2:	f001 fa6d 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 		HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 1);
       a6:	2201      	movs	r2, #1
       a8:	f44f 7180 	mov.w	r1, #256	; 0x100
       ac:	481d      	ldr	r0, [pc, #116]	; (124 <synth_writereg+0xec>)
-      ae:	f001 fa6b 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+      ae:	f001 fa67 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 		HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
       b2:	2200      	movs	r2, #0
       b4:	f44f 7180 	mov.w	r1, #256	; 0x100
       b8:	481a      	ldr	r0, [pc, #104]	; (124 <synth_writereg+0xec>)
-      ba:	f001 fa65 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+      ba:	f001 fa61 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 
 		/* Data read on the falling edge */
 		read_data = read_data
 				| (HAL_GPIO_ReadPin(MISO_GPIO_Port, MISO_Pin)
       be:	f44f 6180 	mov.w	r1, #1024	; 0x400
       c2:	4818      	ldr	r0, [pc, #96]	; (124 <synth_writereg+0xec>)
-      c4:	f001 fa54 	bl	1570 <__HAL_GPIO_ReadPin_veneer>
+      c4:	f001 fa60 	bl	1588 <__HAL_GPIO_ReadPin_veneer>
       c8:	4603      	mov	r3, r0
       ca:	4619      	mov	r1, r3
 						<< (SYNTH_SPI_BITS - 1 - i));
@@ -203,7 +203,7 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
       ee:	2201      	movs	r2, #1
       f0:	f44f 6100 	mov.w	r1, #2048	; 0x800
       f4:	480b      	ldr	r0, [pc, #44]	; (124 <synth_writereg+0xec>)
-      f6:	f001 fa47 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+      f6:	f001 fa43 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 
 	if (verify) {
       fa:	78fb      	ldrb	r3, [r7, #3]
@@ -220,9 +220,9 @@ static uint32_t synth_writereg(const uint32_t data, const uint32_t reg_address, 
      10e:	d004      	beq.n	11a <synth_writereg+0xe2>
 			printf("SPI transmission error!\n");
      110:	4805      	ldr	r0, [pc, #20]	; (128 <synth_writereg+0xf0>)
-     112:	f001 fa55 	bl	15c0 <__puts_veneer>
+     112:	f001 fa2d 	bl	1570 <__puts_veneer>
 			Error_Handler(); // We enter an infinite loop here
-     116:	f001 fa27 	bl	1568 <__Error_Handler_veneer>
+     116:	f001 fa43 	bl	15a0 <__Error_Handler_veneer>
 		}
 	}
 
@@ -290,9 +290,9 @@ uint32_t set_MW_power (const uint8_t mw_power) {
      168:	d904      	bls.n	174 <set_MW_power+0x1a>
 		printf("illegal mw_power - must be an integer from 0 to 3!\n");
      16a:	4811      	ldr	r0, [pc, #68]	; (1b0 <set_MW_power+0x56>)
-     16c:	f001 fa28 	bl	15c0 <__puts_veneer>
+     16c:	f001 fa00 	bl	1570 <__puts_veneer>
 		Error_Handler(); // We enter an infinite loop here
-     170:	f001 f9fa 	bl	1568 <__Error_Handler_veneer>
+     170:	f001 fa16 	bl	15a0 <__Error_Handler_veneer>
 	}
 	uint32_t read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
      174:	2016      	movs	r0, #22
@@ -322,7 +322,7 @@ uint32_t set_MW_power (const uint8_t mw_power) {
      19c:	79fb      	ldrb	r3, [r7, #7]
      19e:	4619      	mov	r1, r3
      1a0:	4804      	ldr	r0, [pc, #16]	; (1b4 <set_MW_power+0x5a>)
-     1a2:	f001 f9f9 	bl	1598 <__printf_veneer>
+     1a2:	f001 fa01 	bl	15a8 <__printf_veneer>
 	return SUCCESS;
      1a6:	2300      	movs	r3, #0
 }
@@ -351,27 +351,27 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
      1c2:	2200      	movs	r2, #0
      1c4:	2102      	movs	r1, #2
      1c6:	4856      	ldr	r0, [pc, #344]	; (320 <_Min_Heap_Size+0x120>)
-     1c8:	f001 f9de 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     1c8:	f001 f9da 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
      1cc:	2201      	movs	r2, #1
      1ce:	2101      	movs	r1, #1
      1d0:	4854      	ldr	r0, [pc, #336]	; (324 <_Min_Heap_Size+0x124>)
-     1d2:	f001 f9d9 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     1d2:	f001 f9d5 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	HAL_GPIO_WritePin(SCLK_GPIO_Port, SCLK_Pin, 0);
      1d6:	2200      	movs	r2, #0
      1d8:	f44f 7180 	mov.w	r1, #256	; 0x100
      1dc:	4852      	ldr	r0, [pc, #328]	; (328 <_Min_Heap_Size+0x128>)
-     1de:	f001 f9d3 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     1de:	f001 f9cf 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	HAL_GPIO_WritePin(SEN_GPIO_Port, SEN_Pin, 1);
      1e2:	2201      	movs	r2, #1
      1e4:	f44f 6100 	mov.w	r1, #2048	; 0x800
      1e8:	484f      	ldr	r0, [pc, #316]	; (328 <_Min_Heap_Size+0x128>)
-     1ea:	f001 f9cd 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     1ea:	f001 f9c9 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	HAL_GPIO_WritePin(REG_EN_GPIO_Port, REG_EN_Pin, 1); // Enable the main regulator.
      1ee:	2201      	movs	r2, #1
      1f0:	f44f 5180 	mov.w	r1, #4096	; 0x1000
      1f4:	484c      	ldr	r0, [pc, #304]	; (328 <_Min_Heap_Size+0x128>)
-     1f6:	f001 f9c7 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     1f6:	f001 f9c3 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 
 	HAL_Delay(100); // Wait 100 ms for the supply to stabilise.
      1fa:	2064      	movs	r0, #100	; 0x64
@@ -404,10 +404,10 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
      228:	2200      	movs	r2, #0
      22a:	f44f 5180 	mov.w	r1, #4096	; 0x1000
      22e:	483e      	ldr	r0, [pc, #248]	; (328 <_Min_Heap_Size+0x128>)
-     230:	f001 f9aa 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     230:	f001 f9a6 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 		printf("Incorrect synthesiser ID!\r\n");
      234:	483f      	ldr	r0, [pc, #252]	; (334 <_Min_Heap_Size+0x134>)
-     236:	f001 f9c3 	bl	15c0 <__puts_veneer>
+     236:	f001 f99b 	bl	1570 <__puts_veneer>
 		return ERROR;
      23a:	2301      	movs	r3, #1
      23c:	e06b      	b.n	316 <_Min_Heap_Size+0x116>
@@ -416,7 +416,7 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
 	/* Everything looks good, we can communicate with the chip :-) */
 	printf("HMC835 Detected.\r\n");
      23e:	483e      	ldr	r0, [pc, #248]	; (338 <_Min_Heap_Size+0x138>)
-     240:	f001 f9be 	bl	15c0 <__puts_veneer>
+     240:	f001 f996 	bl	1570 <__puts_veneer>
 
 	/* Enables Single-Ended output mode for LO2 output */
 	read_data = synth_readreg(MODES_REGISTER); // Get the current value of the modes register
@@ -501,9 +501,9 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
      2b6:	d904      	bls.n	2c2 <_Min_Heap_Size+0xc2>
 		printf("illegal mw_power - must be an integer from 0 to 3!\n");
      2b8:	4820      	ldr	r0, [pc, #128]	; (33c <_Min_Heap_Size+0x13c>)
-     2ba:	f001 f981 	bl	15c0 <__puts_veneer>
+     2ba:	f001 f959 	bl	1570 <__puts_veneer>
 		Error_Handler();
-     2be:	f001 f953 	bl	1568 <__Error_Handler_veneer>
+     2be:	f001 f96f 	bl	15a0 <__Error_Handler_veneer>
 	}
 	read_data = synth_readreg(GAIN_DIVIDER_REGISTER); // Get the current value.
      2c2:	2016      	movs	r0, #22
@@ -541,7 +541,7 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
      2f8:	4b11      	ldr	r3, [pc, #68]	; (340 <_Min_Heap_Size+0x140>)
      2fa:	e9d3 2300 	ldrd	r2, r3, [r3]
      2fe:	4811      	ldr	r0, [pc, #68]	; (344 <_Min_Heap_Size+0x144>)
-     300:	f001 f94a 	bl	1598 <__printf_veneer>
+     300:	f001 f952 	bl	15a8 <__printf_veneer>
 //	struct MW_struct *mw_sweep_settings = 0;  //create a structure to store the sweep settings
 	mw_sweep_settings.state = MW_FIXED_FREQ;
      304:	4b10      	ldr	r3, [pc, #64]	; (348 <_Min_Heap_Size+0x148>)
@@ -551,7 +551,7 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
      30a:	2200      	movs	r2, #0
      30c:	2102      	movs	r1, #2
      30e:	480f      	ldr	r0, [pc, #60]	; (34c <_Min_Heap_Size+0x14c>)
-     310:	f001 f93a 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     310:	f001 f936 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	return SUCCESS;
      314:	2300      	movs	r3, #0
 }
@@ -665,7 +665,7 @@ void set_frequency_hz(const double fo) {
      3dc:	2201      	movs	r2, #1
      3de:	2102      	movs	r1, #2
      3e0:	481b      	ldr	r0, [pc, #108]	; (450 <_Min_Stack_Size+0x50>)
-     3e2:	f001 f8d1 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     3e2:	f001 f8cd 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	//set_frequency(NINT, NFRAC, k, MANUAL_MUTE); //Sets only the necessary Hittite registers
 	set_freq_regs(NINT, NFRAC, k); //Sets only the necessary Hittite registers
      3e6:	69fa      	ldr	r2, [r7, #28]
@@ -693,21 +693,21 @@ void set_frequency_hz(const double fo) {
      410:	2200      	movs	r2, #0
      412:	2102      	movs	r1, #2
      414:	4810      	ldr	r0, [pc, #64]	; (458 <_Min_Stack_Size+0x58>)
-     416:	f001 f8b7 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     416:	f001 f8b3 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 		printf("Failed to establish MW Lock within %ld us of setting frequency!\r\n", MW_STABILISE_TIME_US);
      41a:	f241 7370 	movw	r3, #6000	; 0x1770
      41e:	4619      	mov	r1, r3
      420:	480e      	ldr	r0, [pc, #56]	; (45c <_Min_Stack_Size+0x5c>)
-     422:	f001 f8b9 	bl	1598 <__printf_veneer>
+     422:	f001 f8c1 	bl	15a8 <__printf_veneer>
 #ifdef HALT_ON_LOSS_OF_LOCK
 		Error_Handler();
-     426:	f001 f89f 	bl	1568 <__Error_Handler_veneer>
+     426:	f001 f8bb 	bl	15a0 <__Error_Handler_veneer>
 #endif //HALT_ON_LOSS_OF_LOCK
 		HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
      42a:	2200      	movs	r2, #0
      42c:	2102      	movs	r1, #2
      42e:	4808      	ldr	r0, [pc, #32]	; (450 <_Min_Stack_Size+0x50>)
-     430:	f001 f8aa 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     430:	f001 f8a6 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	}
 
 }
@@ -834,82 +834,82 @@ static void set_freq_regs(const uint32_t integer, const uint32_t fraction, const
      516:	781b      	ldrb	r3, [r3, #0]
      518:	4619      	mov	r1, r3
      51a:	4834      	ldr	r0, [pc, #208]	; (5ec <print_mw_sweep_settings+0xdc>)
-     51c:	f001 f83c 	bl	1598 <__printf_veneer>
+     51c:	f001 f844 	bl	15a8 <__printf_veneer>
   	printf("k: %u \r\n", mw_sweep_settings.k);
      520:	4b31      	ldr	r3, [pc, #196]	; (5e8 <print_mw_sweep_settings+0xd8>)
      522:	785b      	ldrb	r3, [r3, #1]
      524:	4619      	mov	r1, r3
      526:	4832      	ldr	r0, [pc, #200]	; (5f0 <print_mw_sweep_settings+0xe0>)
-     528:	f001 f836 	bl	1598 <__printf_veneer>
+     528:	f001 f83e 	bl	15a8 <__printf_veneer>
   	printf("NINT: %lu \r\n", mw_sweep_settings.NINT);
      52c:	4b2e      	ldr	r3, [pc, #184]	; (5e8 <print_mw_sweep_settings+0xd8>)
      52e:	685b      	ldr	r3, [r3, #4]
      530:	4619      	mov	r1, r3
      532:	4830      	ldr	r0, [pc, #192]	; (5f4 <print_mw_sweep_settings+0xe4>)
-     534:	f001 f830 	bl	1598 <__printf_veneer>
+     534:	f001 f838 	bl	15a8 <__printf_veneer>
   	printf("NFRAC_start: %lu \r\n", mw_sweep_settings.NFRAC_start);
      538:	4b2b      	ldr	r3, [pc, #172]	; (5e8 <print_mw_sweep_settings+0xd8>)
      53a:	689b      	ldr	r3, [r3, #8]
      53c:	4619      	mov	r1, r3
      53e:	482e      	ldr	r0, [pc, #184]	; (5f8 <print_mw_sweep_settings+0xe8>)
-     540:	f001 f82a 	bl	1598 <__printf_veneer>
+     540:	f001 f832 	bl	15a8 <__printf_veneer>
   	printf("num_steps: %lu \r\n", mw_sweep_settings.num_steps);
      544:	4b28      	ldr	r3, [pc, #160]	; (5e8 <print_mw_sweep_settings+0xd8>)
      546:	68db      	ldr	r3, [r3, #12]
      548:	4619      	mov	r1, r3
      54a:	482c      	ldr	r0, [pc, #176]	; (5fc <print_mw_sweep_settings+0xec>)
-     54c:	f001 f824 	bl	1598 <__printf_veneer>
+     54c:	f001 f82c 	bl	15a8 <__printf_veneer>
   	printf("step_size: %lu \r\n", mw_sweep_settings.step_size);
      550:	4b25      	ldr	r3, [pc, #148]	; (5e8 <print_mw_sweep_settings+0xd8>)
      552:	691b      	ldr	r3, [r3, #16]
      554:	4619      	mov	r1, r3
      556:	482a      	ldr	r0, [pc, #168]	; (600 <print_mw_sweep_settings+0xf0>)
-     558:	f001 f81e 	bl	1598 <__printf_veneer>
+     558:	f001 f826 	bl	15a8 <__printf_veneer>
   	printf("pop_cycles_per_point: %lu \r\n", mw_sweep_settings.pop_cycles_per_point);
      55c:	4b22      	ldr	r3, [pc, #136]	; (5e8 <print_mw_sweep_settings+0xd8>)
      55e:	695b      	ldr	r3, [r3, #20]
      560:	4619      	mov	r1, r3
      562:	4828      	ldr	r0, [pc, #160]	; (604 <print_mw_sweep_settings+0xf4>)
-     564:	f001 f818 	bl	1598 <__printf_veneer>
+     564:	f001 f820 	bl	15a8 <__printf_veneer>
   	printf("stabilise_time: %lu us\r\n", mw_sweep_settings.stabilise_time);
      568:	4b1f      	ldr	r3, [pc, #124]	; (5e8 <print_mw_sweep_settings+0xd8>)
      56a:	699b      	ldr	r3, [r3, #24]
      56c:	4619      	mov	r1, r3
      56e:	4826      	ldr	r0, [pc, #152]	; (608 <print_mw_sweep_settings+0xf8>)
-     570:	f001 f812 	bl	1598 <__printf_veneer>
+     570:	f001 f81a 	bl	15a8 <__printf_veneer>
   	printf("dwell_time: %lu us\r\n", mw_sweep_settings.dwell_time);
      574:	4b1c      	ldr	r3, [pc, #112]	; (5e8 <print_mw_sweep_settings+0xd8>)
      576:	69db      	ldr	r3, [r3, #28]
      578:	4619      	mov	r1, r3
      57a:	4824      	ldr	r0, [pc, #144]	; (60c <print_mw_sweep_settings+0xfc>)
-     57c:	f001 f80c 	bl	1598 <__printf_veneer>
+     57c:	f001 f814 	bl	15a8 <__printf_veneer>
   	printf("MW_processing_time: %lu us\r\n", mw_sweep_settings.MW_processing_time);
      580:	4b19      	ldr	r3, [pc, #100]	; (5e8 <print_mw_sweep_settings+0xd8>)
      582:	6a1b      	ldr	r3, [r3, #32]
      584:	4619      	mov	r1, r3
      586:	4822      	ldr	r0, [pc, #136]	; (610 <print_mw_sweep_settings+0x100>)
-     588:	f001 f806 	bl	1598 <__printf_veneer>
+     588:	f001 f80e 	bl	15a8 <__printf_veneer>
   	printf("current_point: %lu\r\n", mw_sweep_settings.current_point);
      58c:	4b16      	ldr	r3, [pc, #88]	; (5e8 <print_mw_sweep_settings+0xd8>)
      58e:	6a5b      	ldr	r3, [r3, #36]	; 0x24
      590:	4619      	mov	r1, r3
      592:	4820      	ldr	r0, [pc, #128]	; (614 <print_mw_sweep_settings+0x104>)
-     594:	f001 f800 	bl	1598 <__printf_veneer>
+     594:	f001 f808 	bl	15a8 <__printf_veneer>
   	printf("centre_freq: %f Hz\r\n", mw_sweep_settings.centre_freq);
      598:	4b13      	ldr	r3, [pc, #76]	; (5e8 <print_mw_sweep_settings+0xd8>)
      59a:	e9d3 230a 	ldrd	r2, r3, [r3, #40]	; 0x28
      59e:	481e      	ldr	r0, [pc, #120]	; (618 <print_mw_sweep_settings+0x108>)
-     5a0:	f000 fffa 	bl	1598 <__printf_veneer>
+     5a0:	f001 f802 	bl	15a8 <__printf_veneer>
   	printf("span: %f Hz\r\n", mw_sweep_settings.span);
      5a4:	4b10      	ldr	r3, [pc, #64]	; (5e8 <print_mw_sweep_settings+0xd8>)
      5a6:	e9d3 230c 	ldrd	r2, r3, [r3, #48]	; 0x30
      5aa:	481c      	ldr	r0, [pc, #112]	; (61c <print_mw_sweep_settings+0x10c>)
-     5ac:	f000 fff4 	bl	1598 <__printf_veneer>
+     5ac:	f000 fffc 	bl	15a8 <__printf_veneer>
   	printf("sweep_period: %f s\r\n", mw_sweep_settings.sweep_period);
      5b0:	4b0d      	ldr	r3, [pc, #52]	; (5e8 <print_mw_sweep_settings+0xd8>)
      5b2:	e9d3 230e 	ldrd	r2, r3, [r3, #56]	; 0x38
      5b6:	481a      	ldr	r0, [pc, #104]	; (620 <print_mw_sweep_settings+0x110>)
-     5b8:	f000 ffee 	bl	1598 <__printf_veneer>
+     5b8:	f000 fff6 	bl	15a8 <__printf_veneer>
     printf("sweep_type: %s \r\n", mw_sweep_settings.sweep_type ? "FIXED_TIME" : "FIXED_STEPS");
      5bc:	4b0a      	ldr	r3, [pc, #40]	; (5e8 <print_mw_sweep_settings+0xd8>)
      5be:	f893 3040 	ldrb.w	r3, [r3, #64]	; 0x40
@@ -920,13 +920,13 @@ static void set_freq_regs(const uint32_t integer, const uint32_t fraction, const
      5ca:	4b17      	ldr	r3, [pc, #92]	; (628 <print_mw_sweep_settings+0x118>)
      5cc:	4619      	mov	r1, r3
      5ce:	4817      	ldr	r0, [pc, #92]	; (62c <print_mw_sweep_settings+0x11c>)
-     5d0:	f000 ffe2 	bl	1598 <__printf_veneer>
+     5d0:	f000 ffea 	bl	15a8 <__printf_veneer>
     printf("sweep_mode: %d\r\n", mw_sweep_settings.sweep_mode);
      5d4:	4b04      	ldr	r3, [pc, #16]	; (5e8 <print_mw_sweep_settings+0xd8>)
      5d6:	f893 3041 	ldrb.w	r3, [r3, #65]	; 0x41
      5da:	4619      	mov	r1, r3
      5dc:	4814      	ldr	r0, [pc, #80]	; (630 <print_mw_sweep_settings+0x120>)
-     5de:	f000 ffdb 	bl	1598 <__printf_veneer>
+     5de:	f000 ffe3 	bl	15a8 <__printf_veneer>
 }
      5e2:	bf00      	nop
      5e4:	bd80      	pop	{r7, pc}
@@ -973,11 +973,11 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
      656:	e9cd 2300 	strd	r2, r3, [sp]
      65a:	ec53 2b15 	vmov	r2, r3, d5
      65e:	4892      	ldr	r0, [pc, #584]	; (8a8 <calc_defined_step_MW_sweep+0x274>)
-     660:	f000 ff9a 	bl	1598 <__printf_veneer>
+     660:	f000 ffa2 	bl	15a8 <__printf_veneer>
 	printf("and %ld POP cycles per point\r\n", pop_cycles_per_point);
      664:	6879      	ldr	r1, [r7, #4]
      666:	4891      	ldr	r0, [pc, #580]	; (8ac <calc_defined_step_MW_sweep+0x278>)
-     668:	f000 ff96 	bl	1598 <__printf_veneer>
+     668:	f000 ff9e 	bl	15a8 <__printf_veneer>
 	mw_sweep_settings.sweep_type = FIXED_STEPS;
      66c:	4b90      	ldr	r3, [pc, #576]	; (8b0 <calc_defined_step_MW_sweep+0x27c>)
      66e:	2200      	movs	r2, #0
@@ -1024,7 +1024,7 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
      6ce:	e9d7 230e 	ldrd	r2, r3, [r7, #56]	; 0x38
      6d2:	6839      	ldr	r1, [r7, #0]
      6d4:	4877      	ldr	r0, [pc, #476]	; (8b4 <calc_defined_step_MW_sweep+0x280>)
-     6d6:	f000 ff5f 	bl	1598 <__printf_veneer>
+     6d6:	f000 ff67 	bl	15a8 <__printf_veneer>
 	const double unit_step_size_Hz = REF_FREQ / (double) (mw_sweep_settings.k * (1 << 24)); //minimum step size possible
      6da:	ed9f 5b6b 	vldr	d5, [pc, #428]	; 888 <calc_defined_step_MW_sweep+0x254>
      6de:	4b74      	ldr	r3, [pc, #464]	; (8b0 <calc_defined_step_MW_sweep+0x27c>)
@@ -1068,7 +1068,7 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
 	printf("Step size achieved: %.3g Hz\r\n", achieved_step_size);
      73e:	e9d7 230a 	ldrd	r2, r3, [r7, #40]	; 0x28
      742:	485d      	ldr	r0, [pc, #372]	; (8b8 <calc_defined_step_MW_sweep+0x284>)
-     744:	f000 ff28 	bl	1598 <__printf_veneer>
+     744:	f000 ff30 	bl	15a8 <__printf_veneer>
 	mw_sweep_settings.num_steps = span / achieved_step_size;
      748:	ed97 5b02 	vldr	d5, [r7, #8]
      74c:	ed97 6b0a 	vldr	d6, [r7, #40]	; 0x28
@@ -1159,7 +1159,7 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
 	printf("Sweep period: %.3g s\r\n", calc_sweep_time);
      82e:	e9d7 2306 	ldrd	r2, r3, [r7, #24]
      832:	4823      	ldr	r0, [pc, #140]	; (8c0 <calc_defined_step_MW_sweep+0x28c>)
-     834:	f000 feb0 	bl	1598 <__printf_veneer>
+     834:	f000 feb8 	bl	15a8 <__printf_veneer>
 	printf("%ld points, %.3g ms each\r\n", mw_sweep_settings.num_steps, 1000 * calc_sweep_time / (mw_sweep_settings.num_steps + 1));
      838:	4b1d      	ldr	r3, [pc, #116]	; (8b0 <calc_defined_step_MW_sweep+0x27c>)
      83a:	68d9      	ldr	r1, [r3, #12]
@@ -1174,7 +1174,7 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
      856:	ee86 5b07 	vdiv.f64	d5, d6, d7
      85a:	ec53 2b15 	vmov	r2, r3, d5
      85e:	4819      	ldr	r0, [pc, #100]	; (8c4 <calc_defined_step_MW_sweep+0x290>)
-     860:	f000 fe9a 	bl	1598 <__printf_veneer>
+     860:	f000 fea2 	bl	15a8 <__printf_veneer>
 
 	mw_sweep_settings.current_point = 0;
      864:	4b12      	ldr	r3, [pc, #72]	; (8b0 <calc_defined_step_MW_sweep+0x27c>)
@@ -1242,7 +1242,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
      8f6:	e9cd 2300 	strd	r2, r3, [sp]
      8fa:	ec53 2b15 	vmov	r2, r3, d5
      8fe:	4898      	ldr	r0, [pc, #608]	; (b60 <calc_fixed_time_MW_sweep+0x298>)
-     900:	f000 fe4a 	bl	1598 <__printf_veneer>
+     900:	f000 fe52 	bl	15a8 <__printf_veneer>
 	mw_sweep_settings.sweep_type = FIXED_TIME;
      904:	4b97      	ldr	r3, [pc, #604]	; (b64 <calc_fixed_time_MW_sweep+0x29c>)
      906:	2201      	movs	r2, #1
@@ -1354,7 +1354,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
      9f4:	6919      	ldr	r1, [r3, #16]
      9f6:	e9d7 2310 	ldrd	r2, r3, [r7, #64]	; 0x40
      9fa:	485d      	ldr	r0, [pc, #372]	; (b70 <calc_fixed_time_MW_sweep+0x2a8>)
-     9fc:	f000 fdcc 	bl	1598 <__printf_veneer>
+     9fc:	f000 fdd4 	bl	15a8 <__printf_veneer>
 
 	//calculate number of steps in sweep and round down to an integer (must fit in time available)
 	mw_sweep_settings.num_steps = (span / achieved_step_size);
@@ -1405,7 +1405,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
      a6c:	4b3d      	ldr	r3, [pc, #244]	; (b64 <calc_fixed_time_MW_sweep+0x29c>)
      a6e:	695b      	ldr	r3, [r3, #20]
      a70:	4841      	ldr	r0, [pc, #260]	; (b78 <calc_fixed_time_MW_sweep+0x2b0>)
-     a72:	f000 fd91 	bl	1598 <__printf_veneer>
+     a72:	f000 fd99 	bl	15a8 <__printf_veneer>
 	uint32_t min_dwell_required_us = mw_sweep_settings.pop_cycles_per_point * POP_period_us + TIMING_MARGIN_US; //minimum dwell_time to achieve above
      a76:	4b3b      	ldr	r3, [pc, #236]	; (b64 <calc_fixed_time_MW_sweep+0x29c>)
      a78:	695b      	ldr	r3, [r3, #20]
@@ -1489,7 +1489,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
      b2c:	e9cd 2300 	strd	r2, r3, [sp]
      b30:	e9d7 2318 	ldrd	r2, r3, [r7, #96]	; 0x60
      b34:	4811      	ldr	r0, [pc, #68]	; (b7c <calc_fixed_time_MW_sweep+0x2b4>)
-     b36:	f000 fd2f 	bl	1598 <__printf_veneer>
+     b36:	f000 fd37 	bl	15a8 <__printf_veneer>
      b3a:	e029      	b.n	b90 <calc_fixed_time_MW_sweep+0x2c8>
      b3c:	f3af 8000 	nop.w
      b40:	00000000 	.word	0x00000000
@@ -1515,7 +1515,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
      b84:	9300      	str	r3, [sp, #0]
      b86:	e9d7 2318 	ldrd	r2, r3, [r7, #96]	; 0x60
      b8a:	4856      	ldr	r0, [pc, #344]	; (ce4 <calc_fixed_time_MW_sweep+0x41c>)
-     b8c:	f000 fd04 	bl	1598 <__printf_veneer>
+     b8c:	f000 fd0c 	bl	15a8 <__printf_veneer>
 
 	//Period of MW sweep isn't precise as it's based on measured average processing time
 	//Steps are increased by up to 10% to increase the sweep period to guarantee horizontal scope sync
@@ -1582,7 +1582,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
 		printf("Final calculated sweep period, including scope sync: %.3g s\r\n", calc_sweep_time);
      c16:	e9d7 2318 	ldrd	r2, r3, [r7, #96]	; 0x60
      c1a:	4833      	ldr	r0, [pc, #204]	; (ce8 <calc_fixed_time_MW_sweep+0x420>)
-     c1c:	f000 fcbc 	bl	1598 <__printf_veneer>
+     c1c:	f000 fcc4 	bl	15a8 <__printf_veneer>
 	}
 
 	/* Can avoid spurs if frequency requested can be encoded exactly  */
@@ -1736,7 +1736,7 @@ void start_POP_calibration(const bool cal_only) {
      d58:	2201      	movs	r2, #1
      d5a:	2102      	movs	r1, #2
      d5c:	480d      	ldr	r0, [pc, #52]	; (d94 <start_POP_calibration+0x54>)
-     d5e:	f000 fc13 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     d5e:	f000 fc0f 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	HAL_Delay(10); // 10ms in case ADC was part-way through a conversion
      d62:	200a      	movs	r0, #10
      d64:	f000 fc08 	bl	1578 <__HAL_Delay_veneer>
@@ -1757,7 +1757,7 @@ void start_POP_calibration(const bool cal_only) {
      d7e:	2200      	movs	r2, #0
      d80:	2102      	movs	r1, #2
      d82:	4804      	ldr	r0, [pc, #16]	; (d94 <start_POP_calibration+0x54>)
-     d84:	f000 fc00 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     d84:	f000 fbfc 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	#ifdef MW_VERBOSE
 		printf("POP calibration started\r\n");
 	#endif //MW_VERBOSE
@@ -1797,7 +1797,7 @@ static const bool start_MW_sweep(const bool single_sweep) {
      db8:	2201      	movs	r2, #1
      dba:	2102      	movs	r1, #2
      dbc:	481a      	ldr	r0, [pc, #104]	; (e28 <start_MW_sweep+0x88>)
-     dbe:	f000 fbe3 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     dbe:	f000 fbdf 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 
 	#ifdef MW_VERBOSE
 		printf("Setting trigger output low \r\n");
@@ -1807,7 +1807,7 @@ static const bool start_MW_sweep(const bool single_sweep) {
      dc2:	2201      	movs	r2, #1
      dc4:	2102      	movs	r1, #2
      dc6:	4819      	ldr	r0, [pc, #100]	; (e2c <start_MW_sweep+0x8c>)
-     dc8:	f000 fbde 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     dc8:	f000 fbda 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 //	set_frequency(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k, MANUAL_MUTE); //program initial MW frequency
 	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k); //program initial MW frequency
      dcc:	4b15      	ldr	r3, [pc, #84]	; (e24 <start_MW_sweep+0x84>)
@@ -1838,7 +1838,7 @@ static const bool start_MW_sweep(const bool single_sweep) {
      df6:	2200      	movs	r2, #0
      df8:	2101      	movs	r1, #1
      dfa:	480e      	ldr	r0, [pc, #56]	; (e34 <start_MW_sweep+0x94>)
-     dfc:	f000 fbc4 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     dfc:	f000 fbc0 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	start_timer(MW_TIMER); //reset MW_timer (MW step timer) and start counting
      e00:	4b0d      	ldr	r3, [pc, #52]	; (e38 <start_MW_sweep+0x98>)
      e02:	681b      	ldr	r3, [r3, #0]
@@ -1913,7 +1913,7 @@ void stop_MW_operation(void) {
      e72:	2200      	movs	r2, #0
      e74:	2102      	movs	r1, #2
      e76:	4804      	ldr	r0, [pc, #16]	; (e88 <stop_MW_operation+0x2c>)
-     e78:	f000 fb86 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     e78:	f000 fb82 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 }
      e7c:	bf00      	nop
      e7e:	bd80      	pop	{r7, pc}
@@ -1978,7 +1978,7 @@ const bool MW_update(void) {
      ee2:	2200      	movs	r2, #0
      ee4:	2102      	movs	r1, #2
      ee6:	4884      	ldr	r0, [pc, #528]	; (10f8 <MW_update+0x26c>)
-     ee8:	f000 fb4e 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     ee8:	f000 fb4a 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 			reset_adc_samples(); //clear any data in the adc sample buffer
      eec:	f7ff f888 	bl	0 <reset_adc_samples>
 			mw_sweep_settings.state = MW_DWELL;
@@ -2021,12 +2021,12 @@ const bool MW_update(void) {
 			HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); //toggles red LED
      f2c:	f44f 4180 	mov.w	r1, #16384	; 0x4000
      f30:	4871      	ldr	r0, [pc, #452]	; (10f8 <MW_update+0x26c>)
-     f32:	f000 fb3d 	bl	15b0 <__HAL_GPIO_TogglePin_veneer>
+     f32:	f000 fb2d 	bl	1590 <__HAL_GPIO_TogglePin_veneer>
 			HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high as about to change frequency
      f36:	2201      	movs	r2, #1
      f38:	2102      	movs	r1, #2
      f3a:	486f      	ldr	r0, [pc, #444]	; (10f8 <MW_update+0x26c>)
-     f3c:	f000 fb24 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     f3c:	f000 fb20 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 			mw_sweep_settings.state = MW_STABILISING;
      f40:	4b6b      	ldr	r3, [pc, #428]	; (10f0 <MW_update+0x264>)
      f42:	2202      	movs	r2, #2
@@ -2042,7 +2042,7 @@ const bool MW_update(void) {
      f52:	2201      	movs	r2, #1
      f54:	2101      	movs	r1, #1
      f56:	4869      	ldr	r0, [pc, #420]	; (10fc <MW_update+0x270>)
-     f58:	f000 fb16 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+     f58:	f000 fb12 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 				sweep_period_us=check_timer(SWEEP_TIMER);
      f5c:	4b68      	ldr	r3, [pc, #416]	; (1100 <MW_update+0x274>)
      f5e:	681b      	ldr	r3, [r3, #0]
@@ -2069,7 +2069,7 @@ const bool MW_update(void) {
      f92:	e9cd 2300 	strd	r2, r3, [sp]
      f96:	ec53 2b15 	vmov	r2, r3, d5
      f9a:	485b      	ldr	r0, [pc, #364]	; (1108 <MW_update+0x27c>)
-     f9c:	f000 fafc 	bl	1598 <__printf_veneer>
+     f9c:	f000 fb04 	bl	15a8 <__printf_veneer>
 				/* Check if the ADC registered the correct number of samples */
 				uint16_t expected_samples = mw_sweep_settings.pop_cycles_per_point * (mw_sweep_settings.num_steps + 1);
      fa0:	4b53      	ldr	r3, [pc, #332]	; (10f0 <MW_update+0x264>)
@@ -2115,10 +2115,10 @@ const bool MW_update(void) {
      fe2:	b292      	uxth	r2, r2
      fe4:	4619      	mov	r1, r3
      fe6:	4849      	ldr	r0, [pc, #292]	; (110c <MW_update+0x280>)
-     fe8:	f000 fad6 	bl	1598 <__printf_veneer>
+     fe8:	f000 fade 	bl	15a8 <__printf_veneer>
 					printf("Timing of last sample is marginal\r\n");
      fec:	4848      	ldr	r0, [pc, #288]	; (1110 <MW_update+0x284>)
-     fee:	f000 fae7 	bl	15c0 <__puts_veneer>
+     fee:	f000 fabf 	bl	1570 <__puts_veneer>
 //				printf("MW processing time: %lu us\r\n", measured_processing_time_us);
 //				if ((double)(measured_processing_time_us)/MW_PROCESSING_TIME_US > 1.1) {
 //					printf("Warning - measured MW processing time (%lu us)is larger than the %lu us expected\r\n", measured_processing_time_us, MW_PROCESSING_TIME_US);
@@ -2213,7 +2213,7 @@ const bool MW_update(void) {
     1092:	681b      	ldr	r3, [r3, #0]
     1094:	4619      	mov	r1, r3
     1096:	4821      	ldr	r0, [pc, #132]	; (111c <MW_update+0x290>)
-    1098:	f000 fa7e 	bl	1598 <__printf_veneer>
+    1098:	f000 fa86 	bl	15a8 <__printf_veneer>
 				action_taken = true;
     109c:	2301      	movs	r3, #1
     109e:	75fb      	strb	r3, [r7, #23]
@@ -2244,12 +2244,12 @@ const bool MW_update(void) {
     10bc:	781b      	ldrb	r3, [r3, #0]
     10be:	4619      	mov	r1, r3
     10c0:	4817      	ldr	r0, [pc, #92]	; (1120 <MW_update+0x294>)
-    10c2:	f000 fa69 	bl	1598 <__printf_veneer>
+    10c2:	f000 fa71 	bl	15a8 <__printf_veneer>
 	       printf("local version: %u \r\n", local_copy_of_MW_state);
     10c6:	7dbb      	ldrb	r3, [r7, #22]
     10c8:	4619      	mov	r1, r3
     10ca:	4816      	ldr	r0, [pc, #88]	; (1124 <MW_update+0x298>)
-    10cc:	f000 fa64 	bl	1598 <__printf_veneer>
+    10cc:	f000 fa6c 	bl	15a8 <__printf_veneer>
     10d0:	e002      	b.n	10d8 <MW_update+0x24c>
 			break; //no action to take
     10d2:	bf00      	nop
@@ -2297,7 +2297,7 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
     1132:	ed87 1b00 	vstr	d1, [r7]
 	printf("MW frequency toggling experiment\r\n");
     1136:	486a      	ldr	r0, [pc, #424]	; (12e0 <MW_frequency_toggle+0x1b8>)
-    1138:	f000 fa42 	bl	15c0 <__puts_veneer>
+    1138:	f000 fa1a 	bl	1570 <__puts_veneer>
 	printf("Toggling between %.10g and %.10g GHz\r\n", f_one/1000000000, f_two/1000000000);
     113c:	ed97 7b02 	vldr	d7, [r7, #8]
     1140:	ed9f 6b5f 	vldr	d6, [pc, #380]	; 12c0 <MW_frequency_toggle+0x198>
@@ -2308,7 +2308,7 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
     1154:	ed8d 7b00 	vstr	d7, [sp]
     1158:	ec53 2b14 	vmov	r2, r3, d4
     115c:	4861      	ldr	r0, [pc, #388]	; (12e4 <MW_frequency_toggle+0x1bc>)
-    115e:	f000 fa1b 	bl	1598 <__printf_veneer>
+    115e:	f000 fa23 	bl	15a8 <__printf_veneer>
 
 	/* For the k divider we need to find the smallest even integer or use a max of 62*/
 	uint32_t k_one = VCO_MAX_FREQ / f_one;
@@ -2433,7 +2433,7 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
     1284:	2200      	movs	r2, #0
     1286:	2101      	movs	r1, #1
     1288:	4817      	ldr	r0, [pc, #92]	; (12e8 <MW_frequency_toggle+0x1c0>)
-    128a:	f000 f97d 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+    128a:	f000 f979 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	timer_delay(SLOW_TIMER, 100); //10ms delay
     128e:	4b17      	ldr	r3, [pc, #92]	; (12ec <MW_frequency_toggle+0x1c4>)
     1290:	681b      	ldr	r3, [r3, #0]
@@ -2449,7 +2449,7 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
     12a4:	2201      	movs	r2, #1
     12a6:	2101      	movs	r1, #1
     12a8:	480f      	ldr	r0, [pc, #60]	; (12e8 <MW_frequency_toggle+0x1c0>)
-    12aa:	f000 f96d 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+    12aa:	f000 f969 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	timer_delay(SLOW_TIMER, 100); //10ms delay
     12ae:	4b0f      	ldr	r3, [pc, #60]	; (12ec <MW_frequency_toggle+0x1c4>)
     12b0:	681b      	ldr	r3, [r3, #0]
@@ -2496,9 +2496,9 @@ void MW_frequency_toggle (const double f_one, const double f_two) {
     1300:	d904      	bls.n	130c <set_SDO_output+0x1c>
 		printf("SDO pin value must be less that 32\r\n");
     1302:	480d      	ldr	r0, [pc, #52]	; (1338 <set_SDO_output+0x48>)
-    1304:	f000 f95c 	bl	15c0 <__puts_veneer>
+    1304:	f000 f934 	bl	1570 <__puts_veneer>
 		Error_Handler();
-    1308:	f000 f92e 	bl	1568 <__Error_Handler_veneer>
+    1308:	f000 f94a 	bl	15a0 <__Error_Handler_veneer>
 	}
 	read_data = synth_readreg(GPO_REGISTER); // Get the current value.
     130c:	200f      	movs	r0, #15
@@ -2695,7 +2695,7 @@ uint32_t measure_POP_cycle(void){
     13f8:	2201      	movs	r2, #1
     13fa:	2102      	movs	r1, #2
     13fc:	4823      	ldr	r0, [pc, #140]	; (148c <measure_POP_cycle+0xac>)
-    13fe:	f000 f8c3 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+    13fe:	f000 f8bf 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	start_timer(MW_TIMER); //reset MW_timer and start counting
     1402:	4b23      	ldr	r3, [pc, #140]	; (1490 <measure_POP_cycle+0xb0>)
     1404:	681b      	ldr	r3, [r3, #0]
@@ -2705,19 +2705,19 @@ uint32_t measure_POP_cycle(void){
     140c:	2200      	movs	r2, #0
     140e:	2102      	movs	r1, #2
     1410:	481e      	ldr	r0, [pc, #120]	; (148c <measure_POP_cycle+0xac>)
-    1412:	f000 f8b9 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+    1412:	f000 f8b5 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 
 	// get the ADC conversion value
 	adc_value = HAL_ADC_GetValue(&hadc3);
     1416:	481f      	ldr	r0, [pc, #124]	; (1494 <measure_POP_cycle+0xb4>)
-    1418:	f000 f8ba 	bl	1590 <__HAL_ADC_GetValue_veneer>
+    1418:	f000 f8a6 	bl	1568 <__HAL_ADC_GetValue_veneer>
     141c:	60f8      	str	r0, [r7, #12]
 	while (cycle_count < iterations) {
     141e:	e00c      	b.n	143a <measure_POP_cycle+0x5a>
 		while (adc_value == last_adc_value) {
 			adc_value = HAL_ADC_GetValue(&hadc3); //keep reading ADC until value changes
     1420:	481c      	ldr	r0, [pc, #112]	; (1494 <measure_POP_cycle+0xb4>)
-    1422:	f000 f8b5 	bl	1590 <__HAL_ADC_GetValue_veneer>
+    1422:	f000 f8a1 	bl	1568 <__HAL_ADC_GetValue_veneer>
     1426:	60f8      	str	r0, [r7, #12]
 		while (adc_value == last_adc_value) {
     1428:	68fa      	ldr	r2, [r7, #12]
@@ -2791,16 +2791,16 @@ void start_pop() {
 	if (HAL_HRTIM_WaveformOutputStart(&hhrtim,
     149c:	f240 1103 	movw	r1, #259	; 0x103
     14a0:	480f      	ldr	r0, [pc, #60]	; (14e0 <start_pop+0x48>)
-    14a2:	f000 f86d 	bl	1580 <__HAL_HRTIM_WaveformOutputStart_veneer>
+    14a2:	f000 f879 	bl	1598 <__HAL_HRTIM_WaveformOutputStart_veneer>
     14a6:	4603      	mov	r3, r0
     14a8:	2b00      	cmp	r3, #0
     14aa:	d004      	beq.n	14b6 <start_pop+0x1e>
 	HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TE1) != HAL_OK) {
 		printf("Failed to start POP!\r\n");
     14ac:	480d      	ldr	r0, [pc, #52]	; (14e4 <start_pop+0x4c>)
-    14ae:	f000 f887 	bl	15c0 <__puts_veneer>
+    14ae:	f000 f85f 	bl	1570 <__puts_veneer>
 		Error_Handler();
-    14b2:	f000 f859 	bl	1568 <__Error_Handler_veneer>
+    14b2:	f000 f875 	bl	15a0 <__Error_Handler_veneer>
 		Error_Handler();
 	}
 
@@ -2809,16 +2809,16 @@ void start_pop() {
 	if (HAL_HRTIM_WaveformCounterStart_IT(&hhrtim,
     14b6:	f44f 1108 	mov.w	r1, #2228224	; 0x220000
     14ba:	4809      	ldr	r0, [pc, #36]	; (14e0 <start_pop+0x48>)
-    14bc:	f000 f87c 	bl	15b8 <__HAL_HRTIM_WaveformCountStart_IT_veneer>
+    14bc:	f000 f878 	bl	15b0 <__HAL_HRTIM_WaveformCountStart_IT_veneer>
     14c0:	4603      	mov	r3, r0
     14c2:	2b00      	cmp	r3, #0
     14c4:	d004      	beq.n	14d0 <start_pop+0x38>
 	HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_E) != HAL_OK) {
 		printf("POP failure point E!\r\n");
     14c6:	4808      	ldr	r0, [pc, #32]	; (14e8 <start_pop+0x50>)
-    14c8:	f000 f87a 	bl	15c0 <__puts_veneer>
+    14c8:	f000 f852 	bl	1570 <__puts_veneer>
 		Error_Handler();
-    14cc:	f000 f84c 	bl	1568 <__Error_Handler_veneer>
+    14cc:	f000 f868 	bl	15a0 <__Error_Handler_veneer>
 	}
 
 	pop_running = true;
@@ -2828,7 +2828,7 @@ void start_pop() {
 
 	printf("POP cycle running!\r\n");
     14d6:	4806      	ldr	r0, [pc, #24]	; (14f0 <start_pop+0x58>)
-    14d8:	f000 f872 	bl	15c0 <__puts_veneer>
+    14d8:	f000 f84a 	bl	1570 <__puts_veneer>
 
 }
     14dc:	bf00      	nop
@@ -2846,27 +2846,27 @@ void stop_pop() {
 	if (HAL_HRTIM_WaveformOutputStop(&hhrtim,
     14f8:	f240 1103 	movw	r1, #259	; 0x103
     14fc:	4813      	ldr	r0, [pc, #76]	; (154c <stop_pop+0x58>)
-    14fe:	f000 f84f 	bl	15a0 <__HAL_HRTIM_WaveformOutputStop_veneer>
+    14fe:	f000 f85f 	bl	15c0 <__HAL_HRTIM_WaveformOutputStop_veneer>
     1502:	4603      	mov	r3, r0
     1504:	2b00      	cmp	r3, #0
     1506:	d004      	beq.n	1512 <stop_pop+0x1e>
 		printf("POP failure point A!\r\n");
     1508:	4811      	ldr	r0, [pc, #68]	; (1550 <stop_pop+0x5c>)
-    150a:	f000 f859 	bl	15c0 <__puts_veneer>
+    150a:	f000 f831 	bl	1570 <__puts_veneer>
 		Error_Handler();
-    150e:	f000 f82b 	bl	1568 <__Error_Handler_veneer>
+    150e:	f000 f847 	bl	15a0 <__Error_Handler_veneer>
 	if (HAL_HRTIM_WaveformCounterStop_IT(&hhrtim,
     1512:	f44f 1108 	mov.w	r1, #2228224	; 0x220000
     1516:	480d      	ldr	r0, [pc, #52]	; (154c <stop_pop+0x58>)
-    1518:	f000 f846 	bl	15a8 <__HAL_HRTIM_WaveformCountStop_IT_veneer>
+    1518:	f000 f84e 	bl	15b8 <__HAL_HRTIM_WaveformCountStop_IT_veneer>
     151c:	4603      	mov	r3, r0
     151e:	2b00      	cmp	r3, #0
     1520:	d004      	beq.n	152c <stop_pop+0x38>
 		printf("POP failure point B!\r\n");
     1522:	480c      	ldr	r0, [pc, #48]	; (1554 <stop_pop+0x60>)
-    1524:	f000 f84c 	bl	15c0 <__puts_veneer>
+    1524:	f000 f824 	bl	1570 <__puts_veneer>
 		Error_Handler();
-    1528:	f000 f81e 	bl	1568 <__Error_Handler_veneer>
+    1528:	f000 f83a 	bl	15a0 <__Error_Handler_veneer>
 	pop_cycle_count = 0;
     152c:	4b0a      	ldr	r3, [pc, #40]	; (1558 <stop_pop+0x64>)
     152e:	2200      	movs	r2, #0
@@ -2879,10 +2879,10 @@ void stop_pop() {
     1538:	2200      	movs	r2, #0
     153a:	2102      	movs	r1, #2
     153c:	4808      	ldr	r0, [pc, #32]	; (1560 <stop_pop+0x6c>)
-    153e:	f000 f823 	bl	1588 <__HAL_GPIO_WritePin_veneer>
+    153e:	f000 f81f 	bl	1580 <__HAL_GPIO_WritePin_veneer>
 	printf("POP cycle stopped!\r\n");
     1542:	4808      	ldr	r0, [pc, #32]	; (1564 <stop_pop+0x70>)
-    1544:	f000 f83c 	bl	15c0 <__puts_veneer>
+    1544:	f000 f814 	bl	1570 <__puts_veneer>
 }
     1548:	bf00      	nop
     154a:	bd80      	pop	{r7, pc}
@@ -2894,53 +2894,53 @@ void stop_pop() {
     1560:	58021000 	.word	0x58021000
     1564:	0801c3ac 	.word	0x0801c3ac
 
-00001568 <__Error_Handler_veneer>:
-    1568:	f85f f000 	ldr.w	pc, [pc]	; 156c <__Error_Handler_veneer+0x4>
-    156c:	08002e3d 	.word	0x08002e3d
+00001568 <__HAL_ADC_GetValue_veneer>:
+    1568:	f85f f000 	ldr.w	pc, [pc]	; 156c <__HAL_ADC_GetValue_veneer+0x4>
+    156c:	0800477d 	.word	0x0800477d
 
-00001570 <__HAL_GPIO_ReadPin_veneer>:
-    1570:	f85f f000 	ldr.w	pc, [pc]	; 1574 <__HAL_GPIO_ReadPin_veneer+0x4>
-    1574:	08007879 	.word	0x08007879
+00001570 <__puts_veneer>:
+    1570:	f85f f000 	ldr.w	pc, [pc]	; 1574 <__puts_veneer+0x4>
+    1574:	08019ad5 	.word	0x08019ad5
 
 00001578 <__HAL_Delay_veneer>:
     1578:	f85f f000 	ldr.w	pc, [pc]	; 157c <__HAL_Delay_veneer+0x4>
     157c:	08003cd1 	.word	0x08003cd1
 
-00001580 <__HAL_HRTIM_WaveformOutputStart_veneer>:
-    1580:	f85f f000 	ldr.w	pc, [pc]	; 1584 <__HAL_HRTIM_WaveformOutputStart_veneer+0x4>
-    1584:	08007f6b 	.word	0x08007f6b
+00001580 <__HAL_GPIO_WritePin_veneer>:
+    1580:	f85f f000 	ldr.w	pc, [pc]	; 1584 <__HAL_GPIO_WritePin_veneer+0x4>
+    1584:	080078a9 	.word	0x080078a9
 
-00001588 <__HAL_GPIO_WritePin_veneer>:
-    1588:	f85f f000 	ldr.w	pc, [pc]	; 158c <__HAL_GPIO_WritePin_veneer+0x4>
-    158c:	080078a9 	.word	0x080078a9
+00001588 <__HAL_GPIO_ReadPin_veneer>:
+    1588:	f85f f000 	ldr.w	pc, [pc]	; 158c <__HAL_GPIO_ReadPin_veneer+0x4>
+    158c:	08007879 	.word	0x08007879
 
-00001590 <__HAL_ADC_GetValue_veneer>:
-    1590:	f85f f000 	ldr.w	pc, [pc]	; 1594 <__HAL_ADC_GetValue_veneer+0x4>
-    1594:	0800477d 	.word	0x0800477d
+00001590 <__HAL_GPIO_TogglePin_veneer>:
+    1590:	f85f f000 	ldr.w	pc, [pc]	; 1594 <__HAL_GPIO_TogglePin_veneer+0x4>
+    1594:	080078db 	.word	0x080078db
 
-00001598 <__printf_veneer>:
-    1598:	f85f f000 	ldr.w	pc, [pc]	; 159c <__printf_veneer+0x4>
-    159c:	08019a09 	.word	0x08019a09
+00001598 <__HAL_HRTIM_WaveformOutputStart_veneer>:
+    1598:	f85f f000 	ldr.w	pc, [pc]	; 159c <__HAL_HRTIM_WaveformOutputStart_veneer+0x4>
+    159c:	08007f6b 	.word	0x08007f6b
 
-000015a0 <__HAL_HRTIM_WaveformOutputStop_veneer>:
-    15a0:	f85f f000 	ldr.w	pc, [pc]	; 15a4 <__HAL_HRTIM_WaveformOutputStop_veneer+0x4>
-    15a4:	08007fc5 	.word	0x08007fc5
+000015a0 <__Error_Handler_veneer>:
+    15a0:	f85f f000 	ldr.w	pc, [pc]	; 15a4 <__Error_Handler_veneer+0x4>
+    15a4:	08002e3d 	.word	0x08002e3d
 
-000015a8 <__HAL_HRTIM_WaveformCountStop_IT_veneer>:
-    15a8:	f85f f000 	ldr.w	pc, [pc]	; 15ac <__HAL_HRTIM_WaveformCountStop_IT_veneer+0x4>
-    15ac:	08008101 	.word	0x08008101
+000015a8 <__printf_veneer>:
+    15a8:	f85f f000 	ldr.w	pc, [pc]	; 15ac <__printf_veneer+0x4>
+    15ac:	08019a09 	.word	0x08019a09
 
-000015b0 <__HAL_GPIO_TogglePin_veneer>:
-    15b0:	f85f f000 	ldr.w	pc, [pc]	; 15b4 <__HAL_GPIO_TogglePin_veneer+0x4>
-    15b4:	080078db 	.word	0x080078db
+000015b0 <__HAL_HRTIM_WaveformCountStart_IT_veneer>:
+    15b0:	f85f f000 	ldr.w	pc, [pc]	; 15b4 <__HAL_HRTIM_WaveformCountStart_IT_veneer+0x4>
+    15b4:	08008021 	.word	0x08008021
 
-000015b8 <__HAL_HRTIM_WaveformCountStart_IT_veneer>:
-    15b8:	f85f f000 	ldr.w	pc, [pc]	; 15bc <__HAL_HRTIM_WaveformCountStart_IT_veneer+0x4>
-    15bc:	08008021 	.word	0x08008021
+000015b8 <__HAL_HRTIM_WaveformCountStop_IT_veneer>:
+    15b8:	f85f f000 	ldr.w	pc, [pc]	; 15bc <__HAL_HRTIM_WaveformCountStop_IT_veneer+0x4>
+    15bc:	08008101 	.word	0x08008101
 
-000015c0 <__puts_veneer>:
-    15c0:	f85f f000 	ldr.w	pc, [pc]	; 15c4 <__puts_veneer+0x4>
-    15c4:	08019ad5 	.word	0x08019ad5
+000015c0 <__HAL_HRTIM_WaveformOutputStop_veneer>:
+    15c0:	f85f f000 	ldr.w	pc, [pc]	; 15c4 <__HAL_HRTIM_WaveformOutputStop_veneer+0x4>
+    15c4:	08007fc5 	.word	0x08007fc5
 
 Disassembly of section .text:
 
@@ -3535,7 +3535,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001d96:	4b52      	ldr	r3, [pc, #328]	; (8001ee0 <main+0x270>)
  8001d98:	781b      	ldrb	r3, [r3, #0]
  8001d9a:	4618      	mov	r0, r3
- 8001d9c:	f019 fdc4 	bl	801b928 <__init_synthesiser_veneer>
+ 8001d9c:	f019 fddc 	bl	801b958 <__init_synthesiser_veneer>
  8001da0:	4603      	mov	r3, r0
  8001da2:	2b00      	cmp	r3, #0
  8001da4:	d004      	beq.n	8001db0 <main+0x140>
@@ -3671,10 +3671,10 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001eb0:	4b1e      	ldr	r3, [pc, #120]	; (8001f2c <main+0x2bc>)
  8001eb2:	681b      	ldr	r3, [r3, #0]
  8001eb4:	4618      	mov	r0, r3
- 8001eb6:	f019 fd63 	bl	801b980 <__start_timer_veneer>
+ 8001eb6:	f019 fd5f 	bl	801b978 <__start_timer_veneer>
 	start_POP_calibration(true);
  8001eba:	2001      	movs	r0, #1
- 8001ebc:	f019 fd58 	bl	801b970 <__start_POP_calibration_veneer>
+ 8001ebc:	f019 fd60 	bl	801b980 <__start_POP_calibration_veneer>
 	while (!POP_period_us && (check_timer(SWEEP_TIMER) < 3000000)) {
  8001ec0:	e038      	b.n	8001f34 <main+0x2c4>
  8001ec2:	bf00      	nop
@@ -3706,7 +3706,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001f28:	0801bbd4 	.word	0x0801bbd4
  8001f2c:	20000020 	.word	0x20000020
 		MW_update();
- 8001f30:	f019 fd12 	bl	801b958 <__MW_update_veneer>
+ 8001f30:	f019 fd1e 	bl	801b970 <__MW_update_veneer>
 	while (!POP_period_us && (check_timer(SWEEP_TIMER) < 3000000)) {
  8001f34:	4b4a      	ldr	r3, [pc, #296]	; (8002060 <main+0x3f0>)
  8001f36:	681b      	ldr	r3, [r3, #0]
@@ -3715,7 +3715,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001f3c:	4b49      	ldr	r3, [pc, #292]	; (8002064 <main+0x3f4>)
  8001f3e:	681b      	ldr	r3, [r3, #0]
  8001f40:	4618      	mov	r0, r3
- 8001f42:	f019 fcf5 	bl	801b930 <__check_timer_veneer>
+ 8001f42:	f019 fcf9 	bl	801b938 <__check_timer_veneer>
  8001f46:	4603      	mov	r3, r0
  8001f48:	4a47      	ldr	r2, [pc, #284]	; (8002068 <main+0x3f8>)
  8001f4a:	4293      	cmp	r3, r2
@@ -3724,7 +3724,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001f4e:	4b45      	ldr	r3, [pc, #276]	; (8002064 <main+0x3f4>)
  8001f50:	681b      	ldr	r3, [r3, #0]
  8001f52:	4618      	mov	r0, r3
- 8001f54:	f019 fcf0 	bl	801b938 <__stop_timer_veneer>
+ 8001f54:	f019 fd04 	bl	801b960 <__stop_timer_veneer>
 	if (!POP_period_us) {//if the calibration loop timed out
  8001f58:	4b41      	ldr	r3, [pc, #260]	; (8002060 <main+0x3f0>)
  8001f5a:	681b      	ldr	r3, [r3, #0]
@@ -3741,7 +3741,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001f74:	ed9f 2b36 	vldr	d2, [pc, #216]	; 8002050 <main+0x3e0>
  8001f78:	ed9f 1b37 	vldr	d1, [pc, #220]	; 8002058 <main+0x3e8>
  8001f7c:	eeb0 0b47 	vmov.f64	d0, d7
- 8001f80:	f019 fcfa 	bl	801b978 <__calc_fixed_time_MW_sweep_veneer>
+ 8001f80:	f019 fce2 	bl	801b948 <__calc_fixed_time_MW_sweep_veneer>
 	printf("Entering main while loop\r\n");
  8001f84:	483a      	ldr	r0, [pc, #232]	; (8002070 <main+0x400>)
  8001f86:	f017 fda5 	bl	8019ad4 <puts>
@@ -3792,7 +3792,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001fd8:	4b2a      	ldr	r3, [pc, #168]	; (8002084 <main+0x414>)
  8001fda:	781b      	ldrb	r3, [r3, #0]
  8001fdc:	4618      	mov	r0, r3
- 8001fde:	f019 fcb7 	bl	801b950 <__set_MW_power_veneer>
+ 8001fde:	f019 fcc3 	bl	801b968 <__set_MW_power_veneer>
 				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
  8001fe2:	4b28      	ldr	r3, [pc, #160]	; (8002084 <main+0x414>)
  8001fe4:	781b      	ldrb	r3, [r3, #0]
@@ -3808,7 +3808,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8001ff8:	2201      	movs	r2, #1
  8001ffa:	701a      	strb	r2, [r3, #0]
 				start_continuous_MW_sweep();
- 8001ffc:	f019 fca0 	bl	801b940 <__start_continuous_MW_sweep_veneer>
+ 8001ffc:	f019 fc98 	bl	801b930 <__start_continuous_MW_sweep_veneer>
 			while(blue_button_status) {//remain here polling button until it is released
  8002000:	e012      	b.n	8002028 <main+0x3b8>
 				timer_delay(SLOW_TIMER, 100); //10ms delay
@@ -3816,7 +3816,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8002004:	681b      	ldr	r3, [r3, #0]
  8002006:	2164      	movs	r1, #100	; 0x64
  8002008:	4618      	mov	r0, r3
- 800200a:	f019 fcad 	bl	801b968 <__timer_delay_veneer>
+ 800200a:	f019 fca1 	bl	801b950 <__timer_delay_veneer>
 				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
  800200e:	f44f 5100 	mov.w	r1, #8192	; 0x2000
  8002012:	4818      	ldr	r0, [pc, #96]	; (8002074 <main+0x404>)
@@ -3839,7 +3839,7 @@ __STATIC_FORCEINLINE void __DSB(void)
  8002032:	4b13      	ldr	r3, [pc, #76]	; (8002080 <main+0x410>)
  8002034:	781b      	ldrb	r3, [r3, #0]
 		MW_update();
- 8002036:	f019 fc8f 	bl	801b958 <__MW_update_veneer>
+ 8002036:	f019 fc9b 	bl	801b970 <__MW_update_veneer>
 		blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
  800203a:	e7a6      	b.n	8001f8a <main+0x31a>
  800203c:	f3af 8000 	nop.w
@@ -5821,7 +5821,7 @@ void Error_Handler(void)
  8002e78:	f44f 727a 	mov.w	r2, #1000	; 0x3e8
  8002e7c:	4611      	mov	r1, r2
  8002e7e:	4618      	mov	r0, r3
- 8002e80:	f018 fd72 	bl	801b968 <__timer_delay_veneer>
+ 8002e80:	f018 fd66 	bl	801b950 <__timer_delay_veneer>
 		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin); //toggle red LED
  8002e84:	e7f1      	b.n	8002e6a <Error_Handler+0x2e>
  8002e86:	bf00      	nop
@@ -7543,13 +7543,13 @@ void HAL_HRTIM_Compare3EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t Timer
  800382a:	429a      	cmp	r2, r3
  800382c:	d106      	bne.n	800383c <HAL_HRTIM_Compare3EventCallback+0xa4>
 			stop_pop();
- 800382e:	f018 f897 	bl	801b960 <__stop_pop_veneer>
+ 800382e:	f018 f87b 	bl	801b928 <__stop_pop_veneer>
 			i = 0;
  8003832:	4b0f      	ldr	r3, [pc, #60]	; (8003870 <HAL_HRTIM_Compare3EventCallback+0xd8>)
  8003834:	2200      	movs	r2, #0
  8003836:	601a      	str	r2, [r3, #0]
 			start_pop();
- 8003838:	f018 f886 	bl	801b948 <__start_pop_veneer>
+ 8003838:	f018 f882 	bl	801b940 <__start_pop_veneer>
 
 #ifdef SYNTH_ENABLE
 		set_frequency_hz(start_freq + (i * sweep_settings.step_size));
@@ -68856,50 +68856,50 @@ pbuf_header_failed:
  801b924:	469e      	mov	lr, r3
  801b926:	4770      	bx	lr
 
-0801b928 <__init_synthesiser_veneer>:
- 801b928:	f85f f000 	ldr.w	pc, [pc]	; 801b92c <__init_synthesiser_veneer+0x4>
- 801b92c:	000001b9 	.word	0x000001b9
+0801b928 <__stop_pop_veneer>:
+ 801b928:	f85f f000 	ldr.w	pc, [pc]	; 801b92c <__stop_pop_veneer+0x4>
+ 801b92c:	000014f5 	.word	0x000014f5
 
-0801b930 <__check_timer_veneer>:
- 801b930:	f85f f000 	ldr.w	pc, [pc]	; 801b934 <__check_timer_veneer+0x4>
- 801b934:	0000139d 	.word	0x0000139d
+0801b930 <__start_continuous_MW_sweep_veneer>:
+ 801b930:	f85f f000 	ldr.w	pc, [pc]	; 801b934 <__start_continuous_MW_sweep_veneer+0x4>
+ 801b934:	00000e41 	.word	0x00000e41
 
-0801b938 <__stop_timer_veneer>:
- 801b938:	f85f f000 	ldr.w	pc, [pc]	; 801b93c <__stop_timer_veneer+0x4>
- 801b93c:	00001379 	.word	0x00001379
+0801b938 <__check_timer_veneer>:
+ 801b938:	f85f f000 	ldr.w	pc, [pc]	; 801b93c <__check_timer_veneer+0x4>
+ 801b93c:	0000139d 	.word	0x0000139d
 
-0801b940 <__start_continuous_MW_sweep_veneer>:
- 801b940:	f85f f000 	ldr.w	pc, [pc]	; 801b944 <__start_continuous_MW_sweep_veneer+0x4>
- 801b944:	00000e41 	.word	0x00000e41
+0801b940 <__start_pop_veneer>:
+ 801b940:	f85f f000 	ldr.w	pc, [pc]	; 801b944 <__start_pop_veneer+0x4>
+ 801b944:	00001499 	.word	0x00001499
 
-0801b948 <__start_pop_veneer>:
- 801b948:	f85f f000 	ldr.w	pc, [pc]	; 801b94c <__start_pop_veneer+0x4>
- 801b94c:	00001499 	.word	0x00001499
+0801b948 <__calc_fixed_time_MW_sweep_veneer>:
+ 801b948:	f85f f000 	ldr.w	pc, [pc]	; 801b94c <__calc_fixed_time_MW_sweep_veneer+0x4>
+ 801b94c:	000008c9 	.word	0x000008c9
 
-0801b950 <__set_MW_power_veneer>:
- 801b950:	f85f f000 	ldr.w	pc, [pc]	; 801b954 <__set_MW_power_veneer+0x4>
- 801b954:	0000015b 	.word	0x0000015b
+0801b950 <__timer_delay_veneer>:
+ 801b950:	f85f f000 	ldr.w	pc, [pc]	; 801b954 <__timer_delay_veneer+0x4>
+ 801b954:	000013b5 	.word	0x000013b5
 
-0801b958 <__MW_update_veneer>:
- 801b958:	f85f f000 	ldr.w	pc, [pc]	; 801b95c <__MW_update_veneer+0x4>
- 801b95c:	00000e8d 	.word	0x00000e8d
+0801b958 <__init_synthesiser_veneer>:
+ 801b958:	f85f f000 	ldr.w	pc, [pc]	; 801b95c <__init_synthesiser_veneer+0x4>
+ 801b95c:	000001b9 	.word	0x000001b9
 
-0801b960 <__stop_pop_veneer>:
- 801b960:	f85f f000 	ldr.w	pc, [pc]	; 801b964 <__stop_pop_veneer+0x4>
- 801b964:	000014f5 	.word	0x000014f5
+0801b960 <__stop_timer_veneer>:
+ 801b960:	f85f f000 	ldr.w	pc, [pc]	; 801b964 <__stop_timer_veneer+0x4>
+ 801b964:	00001379 	.word	0x00001379
 
-0801b968 <__timer_delay_veneer>:
- 801b968:	f85f f000 	ldr.w	pc, [pc]	; 801b96c <__timer_delay_veneer+0x4>
- 801b96c:	000013b5 	.word	0x000013b5
+0801b968 <__set_MW_power_veneer>:
+ 801b968:	f85f f000 	ldr.w	pc, [pc]	; 801b96c <__set_MW_power_veneer+0x4>
+ 801b96c:	0000015b 	.word	0x0000015b
 
-0801b970 <__start_POP_calibration_veneer>:
- 801b970:	f85f f000 	ldr.w	pc, [pc]	; 801b974 <__start_POP_calibration_veneer+0x4>
- 801b974:	00000d41 	.word	0x00000d41
+0801b970 <__MW_update_veneer>:
+ 801b970:	f85f f000 	ldr.w	pc, [pc]	; 801b974 <__MW_update_veneer+0x4>
+ 801b974:	00000e8d 	.word	0x00000e8d
 
-0801b978 <__calc_fixed_time_MW_sweep_veneer>:
- 801b978:	f85f f000 	ldr.w	pc, [pc]	; 801b97c <__calc_fixed_time_MW_sweep_veneer+0x4>
- 801b97c:	000008c9 	.word	0x000008c9
+0801b978 <__start_timer_veneer>:
+ 801b978:	f85f f000 	ldr.w	pc, [pc]	; 801b97c <__start_timer_veneer+0x4>
+ 801b97c:	0000133d 	.word	0x0000133d
 
-0801b980 <__start_timer_veneer>:
- 801b980:	f85f f000 	ldr.w	pc, [pc]	; 801b984 <__start_timer_veneer+0x4>
- 801b984:	0000133d 	.word	0x0000133d
+0801b980 <__start_POP_calibration_veneer>:
+ 801b980:	f85f f000 	ldr.w	pc, [pc]	; 801b984 <__start_POP_calibration_veneer+0x4>
+ 801b984:	00000d41 	.word	0x00000d41
