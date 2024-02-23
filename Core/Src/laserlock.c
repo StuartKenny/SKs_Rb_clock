@@ -25,7 +25,7 @@
 /* Typedefs -----------------------------------------------------------*/
 
 /* Defines ------------------------------------------------------------*/
-#define LASER_MIN_MOD 0 //read-only
+#define LASER_MIN_MOD 10 //read-only
 #define LASER_MAX_MOD 1735 //corresponds to 1.4V DAC output for 35mA current
 #define LOCK_TO_DIP 2 //should be 2 or 3 to select the F=? absorption dip
 #define DIP_THRESHOLD 124 //approx 100mV
@@ -83,6 +83,11 @@ void start_laser_tuning(void) {
 	stop_MW_operation(); //releases timers and ensures that sample pulse is generated for ADC
 	laser_state = LASER_STEPPED_UP;
 	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); //Laser_tuning output high
+	if (laser_mod_value > (LASER_MAX_MOD - LASER_STEP)) {
+	    printf("LOSS OF LASER LOCK\r\n");
+	    printf("Modulation value outside bounds: %u\r\n", laser_mod_value);
+		Error_Handler();
+	}
 	laser_mod_value += LASER_STEP;
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 	reset_adc_samples(); //reset ADC samples including sample count
@@ -114,7 +119,7 @@ void start_laser_ramp(void) {
 void stop_laser_tuning(void) {
 	laser_state = LASER_ON_FREQ;
 	stop_timer(MW_TIMER); //release MW_timer
-	stop_timer(SWEEP_TIMER); //release SWEEP_timer
+//	stop_timer(SWEEP_TIMER); //release SWEEP_timer
 	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
 	reset_adc_samples(); //reset ADC samples including sample count
 }
@@ -140,6 +145,11 @@ const bool laser_update(void) {
 			if(adc_average_updated) {
 				adc_polled_above = adc_averaged_val;
 				laser_state = LASER_STEPPED_DOWN;
+				if (laser_mod_value < LASER_MIN_MOD + (2 * LASER_STEP)) {
+				    printf("LOSS OF LASER LOCK\r\n");
+				    printf("Modulation value outside bounds: %u\r\n", laser_mod_value);
+					Error_Handler();
+				}
 				laser_mod_value = laser_mod_value - (2 * LASER_STEP);
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 				reset_adc_samples(); //reset ADC samples including sample count

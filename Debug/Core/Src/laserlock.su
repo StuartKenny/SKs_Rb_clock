@@ -1,4 +1,4 @@
 ../Core/Src/laserlock.c:82:6:start_laser_tuning	8	static
-../Core/Src/laserlock.c:98:6:start_laser_ramp	8	static
-../Core/Src/laserlock.c:114:6:stop_laser_tuning	8	static
-../Core/Src/laserlock.c:126:12:laser_update	16	static
+../Core/Src/laserlock.c:103:6:start_laser_ramp	8	static
+../Core/Src/laserlock.c:119:6:stop_laser_tuning	8	static
+../Core/Src/laserlock.c:131:12:laser_update	16	static

@@ -36,12 +36,12 @@ extern struct netif gnetif;
 //#define ETHERNET_FOR_LDC501
 #define SYNTH_ENABLE
 #define POP_START_PULSE
-//#define QUANTIFY_ADC_NOISE
+#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
 #define NO_SCOPE_SYNC 0
 #define ADD_SCOPE_SYNC_TIME 0
-#define ADC_SAMPLE_POWER 2 // Must be a natural number (zero or positive integer)
-#define ADC_SAMPLES 4 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
+#define ADC_SAMPLE_POWER 0 // Must be a natural number (zero or positive integer)
+#define ADC_SAMPLES 1 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
 #define DIRECT_ADC_TO_DAC
 
 /* USER CODE END PD */
@@ -272,16 +272,16 @@ int main(void)
 			printf("DAC setup failed for channel 1!\r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output 2 to 1.5V \r\n");
-	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 1862) != HAL_OK){
+	printf("Setting DAC output 2 to 0.5V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 720) != HAL_OK){
 			printf("DAC setup failed for channel 2!\r\n");
 		Error_Handler();
 	}
 
-	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
+
 //	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
-	//MW_invalid low to ensure sample pulse is generated - not strictly needed in FPGA state 0
-	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
+//	//MW_invalid low to ensure sample pulse is generated - not strictly needed in FPGA state 0
+
 
 	/* Fire up the ADC
 	 * external trigger, single conversion selected in .ioc file
@@ -291,7 +291,7 @@ int main(void)
 		printf("ADC calibration failure \r\n");
 		Error_Handler();
 	}
-	if ((2^ADC_SAMPLE_POWER) != ADC_SAMPLES) {
+	if (pow(2,ADC_SAMPLE_POWER) != ADC_SAMPLES) {
 		printf("ADC sampling constants incorrectly initialised \r\n");
 		printf("2 ^ ADC_SAMPLE_POWER (%u) does not equal ADC_SAMPLES (%u)\r\n", ADC_SAMPLE_POWER, ADC_SAMPLES);
 		Error_Handler();
@@ -305,16 +305,19 @@ int main(void)
 	#ifdef QUANTIFY_ADC_NOISE
 		adc_raw_max = 0;
 		adc_averaged_max = 0;
-		adc_averaged_min = 60000;
-		adc_raw_min = 60000;
+		adc_averaged_min = 0xFFFF;
+		adc_raw_min = 0xFFFF;
 	#endif //QUANTIFY_ADC_NOISE
 
-	/* Calculate the MW sweep settings
+	/* Measure the POP cycle time
 	 * Notes:
 	 * Measure the period of a POP cycle *AFTER* the ADC has been initialised
 	 * Calculate sweep settings after first POP calibration routine
 	 */
-	start_timer(SWEEP_TIMER); //reset SWEEP_TIMER and start counting
+//	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
+//	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
+	stop_laser_tuning(); //ensure MW_timer not being used and laser tuning pin high
+	start_timer(SWEEP_TIMER); //Using sweep timer for 3s timeout
 	start_POP_calibration(true);
 	//loop here until period of POP cycle has been measured or 3s has elapsed
 	//When correctly connected, POP cycle measurement should take 1.3s
@@ -327,7 +330,7 @@ int main(void)
 	if (!POP_period_us) {//if the calibration loop timed out
 		printf("WARNING - STM32 is not receiving a periodic sample from the FPGA \r\n");
 	}
-
+	stop_MW_operation(); //release MW_SWEEP timer and ensure MW_INVALID is cleared
 //	initiate_MW_calibration_sweep(POP_period);
 //	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
 //	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10, 3600, ADD_SCOPE_SYNC_TIME); //10Hz sweep, 1hr
@@ -411,6 +414,8 @@ int main(void)
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
 
+			start_laser_ramp();
+
 #ifdef ETHERNET_FOR_LDC501
 			printf("Initialising comms with LDC501\r\n");
 			set_laser_state(1);
@@ -428,21 +433,21 @@ int main(void)
 //			//MW_frequency_toggle (3035733689, 3035733789); //infinite loop toggling 100Hz on left of DR dip
 //			//MW_frequency_toggle (3035733689, 3035733699); //infinite loop toggling 10Hz on left of DR dip
 //
-			//change the MW power each time the button is pressed, unless it's the first time round this loop
-			if (mw_sweep_started) {
-				++MW_power; //increase MW_power value by 1
-				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
-					MW_power = 0;
-				}
-				set_MW_power(MW_power);
-			#ifdef MW_VERBOSE
-				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
-			#endif //MW_VERBOSE
-			} else {
-				printf("Initiating sweep.\r\n");
-				mw_sweep_started = true;
-				start_continuous_MW_sweep();
-			}
+//			//change the MW power each time the button is pressed, unless it's the first time round this loop
+//			if (mw_sweep_started) {
+//				++MW_power; //increase MW_power value by 1
+//				if (MW_power>3) { //Loop MW_power back round to 0 if above maximum permissible value i.e. 3
+//					MW_power = 0;
+//				}
+//				set_MW_power(MW_power);
+//			#ifdef MW_VERBOSE
+//				printf("LO2GAIN changed to: 0x%x \r\n", MW_power);
+//			#endif //MW_VERBOSE
+//			} else {
+//				printf("Initiating sweep.\r\n");
+//				mw_sweep_started = true;
+//				start_continuous_MW_sweep();
+//			}
 			while(blue_button_status) {//remain here polling button until it is released
 				timer_delay(SLOW_TIMER, 100); //10ms delay
 				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
@@ -458,6 +463,7 @@ int main(void)
 			//printf("LO2GAIN: 0x%x \r\n", MW_power);
 		}
 		MW_update();
+		laser_update();
 
 #ifdef ETHERNET_FOR_LDC501
 	    /* Ethernet handling */
@@ -508,7 +514,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 96;
+  RCC_OscInitStruct.PLL.PLLN = 80;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -1263,20 +1269,20 @@ static void MX_GPIO_Init(void)
   */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-  adc_val = 0x00FF & HAL_ADC_GetValue(&hadc3); //ensure that only 16 bits are recorded
+  adc_val = 0x0000FFFF & HAL_ADC_GetValue(&hadc3); //ensure that only 16 bits are recorded
   //printf("ADC value: %lu \r\n", adc_val);
   sample_count++;
 	if (ADC_SAMPLE_POWER == 0) { //no averaging required
 	#ifdef QUANTIFY_ADC_NOISE
-	  if (adc_val < adc_min) {
-		  adc_min = adc_val;
-		  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+	  if (adc_val < adc_raw_min) {
+		  adc_raw_min = adc_val;
+		  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_raw_max, adc_raw_min);
 	  }
-	  if (adc_val > adc_max) {
-		  adc_max = adc_val;
-		  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+	  if (adc_val > adc_raw_max) {
+		  adc_raw_max = adc_val;
+		  printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_raw_max, adc_raw_min);
 	  }
-	  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+	  //printf("ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_raw_max, adc_raw_min);
 	#endif //QUANTIFY_ADC_NOISE
 		adc_averaged_val = adc_val;
 		adc_average_updated = true;
@@ -1291,22 +1297,22 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		adc_sample_no++;
 		if (adc_sample_no >= ADC_SAMPLES) adc_sample_no = 0; //set back to zero if loop complete
 		#ifdef QUANTIFY_ADC_NOISE
-		  if (adc_val < adc_min) {
-			  adc_min = adc_val;
+		  if (adc_val < adc_raw_min) {
+			  adc_raw_min = adc_val;
 		  }
-		  if (adc_val > adc_max) {
-			  adc_max = adc_val;
+		  if (adc_val > adc_raw_max) {
+			  adc_raw_max = adc_val;
 		  }
 		  if (adc_average_updated & (adc_averaged_val < adc_averaged_min)) {
 			  adc_averaged_min = adc_averaged_val;
 			  printf("%u ADC samples\r\n", ADC_SAMPLES);
-			  printf("Raw ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+			  printf("Raw ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_raw_max, adc_raw_min);
 			  printf("ADC average reading: %lu, max: %lu, min: %lu \r\n", adc_averaged_val, adc_averaged_max, adc_averaged_min);
 		  }
 		  if (adc_average_updated & (adc_averaged_val > adc_averaged_max)) {
 			  adc_averaged_max = adc_averaged_val;
 			  printf("%u ADC samples\r\n", ADC_SAMPLES);
-			  printf("Raw ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_max, adc_min);
+			  printf("Raw ADC reading: %lu, max: %lu, min: %lu \r\n", adc_val, adc_raw_max, adc_raw_min);
 			  printf("ADC average reading: %lu, max: %lu, min: %lu \r\n", adc_averaged_val, adc_averaged_max, adc_averaged_min);
 			}
 		#endif //QUANTIFY_ADC_NOISE
