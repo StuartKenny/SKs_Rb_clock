@@ -36,12 +36,12 @@ extern struct netif gnetif;
 //#define ETHERNET_FOR_LDC501
 #define SYNTH_ENABLE
 #define POP_START_PULSE
-#define QUANTIFY_ADC_NOISE
+//#define QUANTIFY_ADC_NOISE
 #define MW_VERBOSE
 #define NO_SCOPE_SYNC 0
 #define ADD_SCOPE_SYNC_TIME 0
-#define ADC_SAMPLE_POWER 0 // Must be a natural number (zero or positive integer)
-#define ADC_SAMPLES 1 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
+#define ADC_SAMPLE_POWER 3 // Must be a natural number (zero or positive integer)
+#define ADC_SAMPLES 8 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
 #define DIRECT_ADC_TO_DAC
 
 /* USER CODE END PD */
@@ -145,14 +145,21 @@ extern void stop_MW_operation(void);
 extern const bool MW_update(void);
 extern void start_POP_calibration(const bool cal_only);
 extern void start_continuous_MW_sweep(void);
-extern uint32_t measure_POP_cycle(void);
+//extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
-__attribute__((section(".itcm"))) void reset_adc_samples(void);
+__attribute__((section(".itcm"))) void measure_POP_cycle_time (void);
+__attribute__((section(".itcm"))) void system_mode_MW (void);
+
 /* LASER control functions */
 extern void start_laser_tuning(void);
 extern void start_laser_ramp(void);
 extern void stop_laser_tuning(void);
 extern const bool laser_update(void);
+__attribute__((section(".itcm"))) void system_mode_laser_tuning (void);
+
+/* ADC functions */
+__attribute__((section(".itcm"))) void reset_adc_samples(void);
+
 /* Simon's dodgy functions */
 //extern static void start_pop();
 //extern static void stop_pop();
@@ -267,12 +274,12 @@ int main(void)
 		printf("Failure to initialise DAC channel 2 \r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output 1 to 1.00V \r\n");
+	printf("Setting DAC output 1 (OCXO control) to 1.00V \r\n");
 	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1241) != HAL_OK){
 			printf("DAC setup failed for channel 1!\r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output 2 to 0.5V \r\n");
+	printf("Setting DAC output 2 (laser control) to 0.5V \r\n");
 	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 720) != HAL_OK){
 			printf("DAC setup failed for channel 2!\r\n");
 		Error_Handler();
@@ -309,31 +316,12 @@ int main(void)
 		adc_raw_min = 0xFFFF;
 	#endif //QUANTIFY_ADC_NOISE
 
-	/* Measure the POP cycle time
-	 * Notes:
-	 * Measure the period of a POP cycle *AFTER* the ADC has been initialised
-	 * Calculate sweep settings after first POP calibration routine
+	/* Measure the POP cycle time *AFTER* the ADC has been initialised
+	 * then calculate sweep settings after first POP calibration routine
 	 */
 //	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
 //	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
-	stop_laser_tuning(); //ensure MW_timer not being used and laser tuning pin high
-	start_timer(SWEEP_TIMER); //Using sweep timer for 3s timeout
-	start_POP_calibration(true);
-	//loop here until period of POP cycle has been measured or 3s has elapsed
-	//When correctly connected, POP cycle measurement should take 1.3s
-	while (!POP_period_us && (check_timer(SWEEP_TIMER) < 3000000)) {
-		MW_update();
-//		printf("POP_period_us %lu, SWEEP_TIMER value %lu \r\n", POP_period_us, check_timer(SWEEP_TIMER));
-	}
-//	printf("Finished loop - POP_period_us %lu, SWEEP_TIMER value %lu \r\n", POP_period_us, check_timer(SWEEP_TIMER));
-	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
-	if (!POP_period_us) {//if the calibration loop timed out
-		printf("WARNING - STM32 is not receiving a periodic sample from the FPGA \r\n");
-	}
-	stop_MW_operation(); //release MW_SWEEP timer and ensure MW_INVALID is cleared
-//	initiate_MW_calibration_sweep(POP_period);
-//	calc_fixed_time_MW_sweep(3035735122, 1000, 20, ADD_SCOPE_SYNC_TIME); //1.5kHz sweep, 20s re-centred
-//	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10, 3600, ADD_SCOPE_SYNC_TIME); //10Hz sweep, 1hr
+	measure_POP_cycle_time();
 	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10000, 50, ADD_SCOPE_SYNC_TIME); //10kHz sweep, 50s
 
 
@@ -414,7 +402,12 @@ int main(void)
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
 
-			start_laser_ramp();
+//			start_laser_ramp();
+			printf("Setting DAC output 2 (laser control) to 1.5V \r\n");
+			if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 1862) != HAL_OK){
+					printf("DAC setup failed for channel 2!\r\n");
+				Error_Handler();
+			}
 
 #ifdef ETHERNET_FOR_LDC501
 			printf("Initialising comms with LDC501\r\n");
@@ -449,19 +442,19 @@ int main(void)
 //				start_continuous_MW_sweep();
 //			}
 			while(blue_button_status) {//remain here polling button until it is released
-				timer_delay(SLOW_TIMER, 100); //10ms delay
+				timer_delay(SLOW_TIMER, 100); //1ms delay
 				blue_button_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);
 			}
 		}
 
-		if (mw_sweep_started) {//won't execute until the first time the blue button is pressed
-			/* Run the frequency sweep */
-//			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
-//			run_sweep();
-//			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
-			//printf("Sweep complete.\r\n");
-			//printf("LO2GAIN: 0x%x \r\n", MW_power);
-		}
+//		if (mw_sweep_started) {//won't execute until the first time the blue button is pressed
+//			/* Run the frequency sweep */
+////			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET); //turn on red LED
+////			run_sweep();
+////			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET); //turn off red LED
+//			//printf("Sweep complete.\r\n");
+//			//printf("LO2GAIN: 0x%x \r\n", MW_power);
+//		}
 		MW_update();
 		laser_update();
 
@@ -1353,6 +1346,33 @@ void system_mode_laser_tuning (void)
 	//laser_tuning (FPGA input pin 18) must be high for probe on and MW off
 	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
 	reset_adc_samples(); //reset ADC samples including sample count
+}
+
+/**
+  * @brief  Measure POP cycle time
+  * @param  None
+  * @retval None
+  */
+void measure_POP_cycle_time (void)
+{
+	/* Measure the period of a POP cycle *AFTER* the ADC has been initialised
+	 * Should be performed before calculating sweep settings
+	 */
+	stop_laser_tuning(); //ensure MW_timer not being used and laser tuning pin high
+	start_timer(SWEEP_TIMER); //Using sweep timer for 3s timeout
+	start_POP_calibration(true);
+	//loop here until period of POP cycle has been measured or 3s has elapsed
+	//When correctly connected, POP cycle measurement should take 1.3s
+	while (!POP_period_us && (check_timer(SWEEP_TIMER) < 3000000)) {
+		MW_update();
+//		printf("POP_period_us %lu, SWEEP_TIMER value %lu \r\n", POP_period_us, check_timer(SWEEP_TIMER));
+	}
+//	printf("Finished loop - POP_period_us %lu, SWEEP_TIMER value %lu \r\n", POP_period_us, check_timer(SWEEP_TIMER));
+	stop_timer(SWEEP_TIMER); //stop SWEEP_TIMER
+	if (!POP_period_us) {//if the calibration loop timed out
+		printf("WARNING - STM32 is not receiving a periodic sample from the FPGA \r\n");
+	}
+	stop_MW_operation(); //release MW_SWEEP timer and ensure MW_INVALID is cleared
 }
 
 /**

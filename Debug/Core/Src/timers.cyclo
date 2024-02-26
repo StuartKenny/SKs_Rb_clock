@@ -2,10 +2,9 @@
 ../Core/Src/timers.c:116:10:stop_timer	1
 ../Core/Src/timers.c:127:10:check_timer	1
 ../Core/Src/timers.c:135:6:timer_delay	2
-../Core/Src/timers.c:161:10:measure_POP_cycle	3
-../Core/Src/timers.c:222:6:start_pop	3
-../Core/Src/timers.c:199:6:stop_pop	3
-../Core/Src/timers.c:365:6:HAL_LPTIM_AutoReloadMatchCallback	1
-../Core/Src/timers.c:369:6:HAL_HRTIM_Compare2EventCallback	1
-../Core/Src/timers.c:382:6:HAL_HRTIM_Compare3EventCallback	3
-../Core/Src/timers.c:422:6:HAL_HRTIM_RepetitionEventCallback	1
+../Core/Src/timers.c:220:6:start_pop	3
+../Core/Src/timers.c:197:6:stop_pop	3
+../Core/Src/timers.c:363:6:HAL_LPTIM_AutoReloadMatchCallback	1
+../Core/Src/timers.c:367:6:HAL_HRTIM_Compare2EventCallback	1
+../Core/Src/timers.c:380:6:HAL_HRTIM_Compare3EventCallback	3
+../Core/Src/timers.c:420:6:HAL_HRTIM_RepetitionEventCallback	1

@@ -104,6 +104,7 @@ void start_laser_ramp(void) {
 	stop_MW_operation(); //releases timers and ensures that sample pulse is generated for ADC
 	laser_state = LASER_RAMP_PHASE_ONE;
 	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); //Laser_tuning output high
+	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 	adc_averaged_max = 0;
 	adc_averaged_min = 60000;
 	laser_mod_value = LASER_MIN_MOD;
@@ -182,6 +183,7 @@ const bool laser_update(void) {
 			action_taken = true;
 			stop_timer(MW_TIMER); //release SWEEP_timer
 			laser_state = LASER_RAMP_PHASE_TWO;
+			HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
 			reset_adc_samples(); //reset ADC samples including sample count
 		    printf("Starting laser frequency scan.\r\n");
 		    //break statement not required here
