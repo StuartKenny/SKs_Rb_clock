@@ -26,9 +26,10 @@
 
 /* Defines ------------------------------------------------------------*/
 #define LASER_MIN_MOD 10 //read-only
-#define LASER_MAX_MOD 1735 //corresponds to 1.4V DAC output for 35mA current
+//#define LASER_MAX_MOD 4000 //corresponds to 3.3V DAC output for 35mA LD current
+#define LASER_MAX_MOD 3500 //corresponds to 3.3V DAC output for 35mA LD current
 #define LOCK_TO_DIP 2 //should be 2 or 3 to select the F=? absorption dip
-#define DIP_THRESHOLD 124 //approx 100mV
+#define DIP_THRESHOLD 248 //approx 200mV
 #define LASER_STAB_US 1000 //1ms time for LD temp to stabilise after polling
 
 /* laser states */
@@ -106,7 +107,7 @@ void start_laser_ramp(void) {
 	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); //Laser_tuning output high
 	HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Sets trigger output high
 	adc_averaged_max = 0;
-	adc_averaged_min = 60000;
+	adc_averaged_min = 0xFFFF;
 	laser_mod_value = LASER_MIN_MOD;
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 	start_timer(MW_TIMER); //using MW for 1s delay
@@ -131,6 +132,7 @@ void stop_laser_tuning(void) {
   */
 const bool laser_update(void) {
 	bool action_taken = false;
+	double sweep_time_s = 0;
 	uint8_t local_copy_of_laser_state = laser_state; //hack to make switch statement behave
 	switch (local_copy_of_laser_state)
 	{
@@ -181,10 +183,11 @@ const bool laser_update(void) {
 		case LASER_RAMP_PHASE_ONE: //waiting for the LD temperature to stabilise
 			if (check_timer(MW_TIMER) < 1000000) return(false); //Still waiting, no action taken
 			action_taken = true;
-			stop_timer(MW_TIMER); //release SWEEP_timer
+			stop_timer(MW_TIMER); //release MW_timer
 			laser_state = LASER_RAMP_PHASE_TWO;
 			HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
 			reset_adc_samples(); //reset ADC samples including sample count
+			start_timer(SWEEP_TIMER); //
 		    printf("Starting laser frequency scan.\r\n");
 		    //break statement not required here
 		case LASER_RAMP_PHASE_TWO: //finding F=2 dip
@@ -200,17 +203,20 @@ const bool laser_update(void) {
 				 */
 				if ((adc_averaged_val - adc_averaged_min) >= DIP_THRESHOLD ) {//if the latest reading is significantly above the minimum
 					F2_mod_value = saved_mod_value; //record the modulation value for the F=2 dip
-					adc_averaged_min = 60000; //reset the saved minimum
+					adc_averaged_min = 0xFFFF; //reset the saved minimum
 					laser_state = LASER_RAMP_PHASE_THREE;
 				}
 				laser_mod_value += LASER_STEP; //next laser step
 				if (laser_mod_value >= LASER_MAX_MOD) {//if no longer in range
 				    printf("Have completed absorption scan without detecting any dips.\r\n");
 				    printf("DIP_THRESHOLD: %u\r\n", DIP_THRESHOLD);
+					sweep_time_s = (double) (stop_timer(SWEEP_TIMER)) / 1000000;
+					printf("Sweep complete in %.3g s.\r\n", sweep_time_s);
 					Error_Handler();
 				}
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //set DAC output pin
-				reset_adc_samples(); //reset ADC samples including sample count
+				//reset_adc_samples(); //reset ADC samples including sample count
+				adc_average_updated = false; //clears new reading flag
 				action_taken = true;
 			}
 			break;
@@ -232,10 +238,13 @@ const bool laser_update(void) {
 				if (laser_mod_value >= LASER_MAX_MOD) {//if no longer in range
 					printf("Have completed absorption scan without detecting F=3 DIP.\r\n");
 					printf("DIP_THRESHOLD: %u\r\n", DIP_THRESHOLD);
+					sweep_time_s = (double) (stop_timer(SWEEP_TIMER)) / 1000000;
+					printf("Sweep complete in %.3g s.\r\n", sweep_time_s);
 					Error_Handler();
 				}
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //set DAC output pin
-				reset_adc_samples(); //reset ADC samples including sample count
+				//reset_adc_samples(); //reset ADC samples including sample count
+				adc_average_updated = false; //clears new reading flag
 				action_taken = true;
 			}
 			break;
@@ -243,9 +252,11 @@ const bool laser_update(void) {
 			if(adc_average_updated) {
 				laser_mod_value += LASER_STEP; //next laser step
 				if (laser_mod_value >= LASER_MAX_MOD) {//if no longer in range
-					printf("Absorption spectroscopy complete.\r\n");
+					sweep_time_s = (double) (stop_timer(SWEEP_TIMER)) / 1000000;
+					printf("Absorption spectroscopy complete in %.3g s.\r\n", sweep_time_s);
 					printf("F=2 dip detected at step %u.\r\n", F2_mod_value);
 					printf("F=3 dip detected at step %u.\r\n", F3_mod_value);
+					HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_SET); // Resets trigger output
 					if (LOCK_TO_DIP == 2) {
 						laser_mod_value = F2_mod_value;
 					} else if (LOCK_TO_DIP == 3) {
@@ -258,7 +269,8 @@ const bool laser_update(void) {
 					laser_state = LASER_TEMP_STABILISING;
 				}
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //set DAC output pin
-				reset_adc_samples(); //reset ADC samples including sample count
+				//reset_adc_samples(); //reset ADC samples including sample count
+				adc_average_updated = false; //clears new reading flag
 				action_taken = true;
 			}
 			break;

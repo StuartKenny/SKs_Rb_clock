@@ -274,17 +274,17 @@ int main(void)
 		printf("Failure to initialise DAC channel 2 \r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output 1 (OCXO control) to 1.00V \r\n");
-	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 1241) != HAL_OK){
+	/* DAC values are 1241 steps per Volt. Range of 0 to 4095 */
+	printf("Setting DAC output 1 (OCXO control) to 0V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0) != HAL_OK){
 			printf("DAC setup failed for channel 1!\r\n");
 		Error_Handler();
 	}
-	printf("Setting DAC output 2 (laser control) to 0.5V \r\n");
-	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 720) != HAL_OK){
+	printf("Setting DAC output 2 (laser control) to 0V \r\n");
+	if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0) != HAL_OK){
 			printf("DAC setup failed for channel 2!\r\n");
 		Error_Handler();
 	}
-
 
 //	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_SET); // Laser_tuning output high
 //	//MW_invalid low to ensure sample pulse is generated - not strictly needed in FPGA state 0
@@ -402,12 +402,12 @@ int main(void)
 		if (blue_button_status) {// If blue button is pressed
 			printf("Blue button pressed....\r\n");
 
-//			start_laser_ramp();
-			printf("Setting DAC output 2 (laser control) to 1.5V \r\n");
-			if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 1862) != HAL_OK){
-					printf("DAC setup failed for channel 2!\r\n");
-				Error_Handler();
-			}
+			start_laser_ramp();
+//			printf("Setting DAC output 2 (laser control) to 3.3V \r\n");
+//			if(HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 4095) != HAL_OK){
+//					printf("Couldn't set DAC to 3.3V\r\n");
+//				Error_Handler();
+//			}
 
 #ifdef ETHERNET_FOR_LDC501
 			printf("Initialising comms with LDC501\r\n");
