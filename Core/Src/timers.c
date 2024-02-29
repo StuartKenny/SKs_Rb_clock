@@ -153,47 +153,7 @@ void timer_delay(TIM_TypeDef *timer, const uint32_t delay_count){
 
 }
 
-///**
-//  * @brief  Returns the measured period of a POP cycle as averaged over 20 cycles
-//  * @param  None
-//  * @retval Period expressed as an integer number of microseconds
-//  * No longer used as this is a blocking function
-//  */
-//uint32_t measure_POP_cycle(void){
-//
-//	/* Measures the elapsed time taken for 20 POP cycles
-//	 * Relies on the ADC value changing every time a sample is taken
-//	 * ADC must be initialised before running
-//	 */
-//	uint32_t adc_value = 0;
-//	uint32_t last_adc_value = 9999;
-//	uint8_t cycle_count = 0;
-//	uint32_t period;
-//	const uint8_t iterations = 20;
-//
-//	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); 	//Sets MW_invalid pin high to reset POP cycle
-//	start_timer(MW_TIMER); //reset MW_timer and start counting
-//	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Start POP cycle
-//
-//	// get the ADC conversion value
-//	adc_value = HAL_ADC_GetValue(&hadc3);
-//	while (cycle_count < iterations) {
-//		while (adc_value == last_adc_value) {
-//			adc_value = HAL_ADC_GetValue(&hadc3); //keep reading ADC until value changes
-//		}
-//		last_adc_value = adc_value;
-//		cycle_count++;
-//	}
-//
-//	period = (float)(check_timer(MW_TIMER)) / iterations + 0.5;
-//	stop_timer(MW_TIMER);
-//	#ifdef TIMER_VERBOSE
-//		printf("Time for %u POP cycles: %lu us\r\n", iterations, total_period);
-//		printf("POP period: %lu us\r\n", period);
-//	#endif //TIMER_VERBOSE
-//	return (period);
-//}
-
+#ifdef STM32_GENERATED_POP_TIMING
 void stop_pop() {
 
 	/* Timer A is the LASER enable, Timer E is the microwave pulse */
@@ -257,6 +217,7 @@ void start_pop() {
 	printf("POP cycle running!\r\n");
 
 }
+#endif //STM32_GENERATED_POP_TIMING
 
 //Simon was using this interrupt callback function to detect when the blue button was pressed
 //void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
@@ -364,6 +325,7 @@ void HAL_LPTIM_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim){
 	HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin); //toggle green LED
 }
 
+#ifdef STM32_GENERATED_POP_TIMING
 void HAL_HRTIM_Compare2EventCallback(HRTIM_HandleTypeDef *hhrtim, uint32_t TimerIdx) {
 
 	/* Called when the first microwave pulse goes low */
@@ -424,3 +386,4 @@ void HAL_HRTIM_RepetitionEventCallback(HRTIM_HandleTypeDef *hhrtim,
 	if (TimerIdx == HRTIM_TIMERINDEX_TIMER_A) {
 	}
 }
+#endif //STM32_GENERATED_POP_TIMING

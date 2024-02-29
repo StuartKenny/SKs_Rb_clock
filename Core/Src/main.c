@@ -25,7 +25,9 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+#ifdef ETHERNET_FOR_LDC501
 extern struct netif gnetif;
+#endif //ETHERNET_FOR_LDC501
 
 /* USER CODE END PTD */
 
@@ -40,8 +42,6 @@ extern struct netif gnetif;
 #define MW_VERBOSE
 #define NO_SCOPE_SYNC 0
 #define ADD_SCOPE_SYNC_TIME 0
-#define ADC_SAMPLE_POWER 3 // Must be a natural number (zero or positive integer)
-#define ADC_SAMPLES 8 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
 #define DIRECT_ADC_TO_DAC
 
 /* USER CODE END PD */
@@ -94,15 +94,17 @@ uint32_t adc_readings[ADC_SAMPLES]; //an array for the requisite number of sampl
 uint16_t adc_sample_no = 0; //for storing a rotating pointer to the array
 uint32_t adc_readings_total = 0; //for storing the total of N samples
 bool adc_average_updated = false; //allows polling without needing to compare previous values
+uint32_t adc_polled_above = 0; //used to store adc3 readings
+uint32_t adc_polled_below = 0; //used to store adc3 readings
 #ifdef QUANTIFY_ADC_NOISE
 uint32_t adc_raw_max, adc_raw_min; //used to store adc3 readings
 #endif //QUANTIFY_ADC_NOISE
 uint32_t adc_averaged_max, adc_averaged_min; //used to store adc3 readings
 uint32_t dac_val; //for dac1 output channel 1
 
-const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
-//static const double MW_DELTA = -1817; //MW offset
-static const double MW_DELTA = 1000; //MW offset
+//const double HYPERFINE = 3035736939; //Rb85 hyperfine frequency
+////static const double MW_DELTA = -1817; //MW offset
+//static const double MW_DELTA = 1000; //MW offset
 
 #ifdef ETHERNET_FOR_LDC501
 double ild = 160; //laser diode current, 160mA initial value
@@ -322,7 +324,7 @@ int main(void)
 //	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
 //	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Sets MW_invalid pin low
 	measure_POP_cycle_time();
-	calc_fixed_time_MW_sweep(HYPERFINE + MW_DELTA, 10000, 50, ADD_SCOPE_SYNC_TIME); //10kHz sweep, 50s
+	calc_fixed_time_MW_sweep((double)(HYPERFINE + MW_DELTA), 10000, 50, ADD_SCOPE_SYNC_TIME); //10kHz sweep, 50s
 
 
 //	pin_status = HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port, BLUE_BUTTON_Pin);

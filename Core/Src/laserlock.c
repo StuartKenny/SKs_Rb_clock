@@ -15,7 +15,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "laserlock.h"
-#include "main.h" //needed for port and timer definitions
+#include "main.h" //needed for port, timer and ADC definitions
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -51,6 +51,7 @@ static uint8_t laser_state = LASER_ON_FREQ;
 static const uint16_t LASER_STEP = 3; //circa 60uA @ a calculated 20.1uA/step
 static uint16_t laser_mod_value = LASER_MIN_MOD; //can vary between 0 and 4095
 static uint16_t saved_mod_value = 0; //for temporary storage of a current modulation value
+uint16_t moving_average_offset = 0; //half the width of the moving average
 static uint16_t F2_mod_value = 0; //for storing the initial current modulation value of the F=2 absorption dip
 static uint16_t F3_mod_value = 0; //for storing the initial current modulation value of the F=3 absorption dip
 //static uint32_t max_adc_val = 0; // for temporary storage of the largest adc reading
@@ -58,8 +59,7 @@ static uint16_t F3_mod_value = 0; //for storing the initial current modulation v
 //extern volatile uint16_t sample_count; //counts number of times the sample line drives the ADC trigger high, updated when ADC completes conversion
 extern uint32_t adc_averaged_val, adc_averaged_max, adc_averaged_min; //used to store adc3 readings
 extern bool adc_average_updated; //allows polling without needing to compare previous values
-static uint32_t adc_polled_above = 0; //used to store adc3 readings
-static uint32_t adc_polled_below = 0; //used to store adc3 readings
+extern uint32_t adc_polled_above, adc_polled_below; //used to store adc3 readings
 
 extern uint32_t start_timer(TIM_TypeDef * timer);
 extern uint32_t stop_timer(TIM_TypeDef * timer);
@@ -100,6 +100,8 @@ void start_laser_tuning(void) {
 /**
   * @brief  Starts a laser scan
   * @retval None
+  * This function initiates a laser frequency scan using an n-point moving average
+  * ADC value where n = ADC_SAMPLES
   */
 void start_laser_ramp(void) {
 	stop_MW_operation(); //releases timers and ensures that sample pulse is generated for ADC
@@ -109,6 +111,7 @@ void start_laser_ramp(void) {
 	adc_averaged_max = 0;
 	adc_averaged_min = 0xFFFF;
 	laser_mod_value = LASER_MIN_MOD;
+	if (ADC_SAMPLES > 1) moving_average_offset = ADC_SAMPLES / 2;
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 	start_timer(MW_TIMER); //using MW for 1s delay
     printf("1s delay to allow LD temperature to equalise.\r\n");
@@ -121,7 +124,7 @@ void start_laser_ramp(void) {
 void stop_laser_tuning(void) {
 	laser_state = LASER_ON_FREQ;
 	stop_timer(MW_TIMER); //release MW_timer
-//	stop_timer(SWEEP_TIMER); //release SWEEP_timer
+	stop_timer(SWEEP_TIMER); //release SWEEP_timer
 	HAL_GPIO_WritePin(LASER_TUNING_GPIO_Port, LASER_TUNING_Pin, GPIO_PIN_RESET); // Laser_tuning output low
 	reset_adc_samples(); //reset ADC samples including sample count
 }
@@ -190,6 +193,7 @@ const bool laser_update(void) {
 			start_timer(SWEEP_TIMER); //
 		    printf("Starting laser frequency scan.\r\n");
 		    //break statement not required here
+
 		case LASER_RAMP_PHASE_TWO: //finding F=2 dip
 			if(adc_average_updated) {
 				if (adc_averaged_val < adc_averaged_min) {//if new minimum detected
@@ -202,7 +206,7 @@ const bool laser_update(void) {
 				 * then record F=2 and look for F=3
 				 */
 				if ((adc_averaged_val - adc_averaged_min) >= DIP_THRESHOLD ) {//if the latest reading is significantly above the minimum
-					F2_mod_value = saved_mod_value; //record the modulation value for the F=2 dip
+					F2_mod_value = saved_mod_value - moving_average_offset; //record the modulation value for the F=2 dip
 					adc_averaged_min = 0xFFFF; //reset the saved minimum
 					laser_state = LASER_RAMP_PHASE_THREE;
 				}
@@ -231,7 +235,7 @@ const bool laser_update(void) {
 				 * then record F=3
 				 */
 				if ((adc_averaged_val - adc_averaged_min) >= DIP_THRESHOLD) {//if the latest reading is significant above the minimum
-					F3_mod_value = saved_mod_value; //record the modulation value for the F=3 dip
+					F3_mod_value = saved_mod_value - moving_average_offset; //record the modulation value for the F=3 dip
 					laser_state = LASER_RAMP_PHASE_FOUR;
 				}
 				laser_mod_value += LASER_STEP; //next laser step

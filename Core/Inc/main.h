@@ -123,6 +123,11 @@ extern TIM_TypeDef * SLOW_TIMER;
 extern TIM_TypeDef * MW_TIMER;
 extern TIM_TypeDef * SWEEP_TIMER;
 extern TIM_TypeDef * ETHERNET_TIMER;
+#define ADC_SAMPLE_POWER 3 // Must be a natural number (zero or positive integer)
+#define ADC_SAMPLES 8 // 2 ^ ADC_SAMPLE_POWER. ADC will be averaged over 2^ADC_SAMPLES samples
+//#define STM32_GENERATED_POP_TIMING //Simon's code to generate POP signals using onboard HR Timers
+#define HYPERFINE 3035736939 //Rb85 hyperfine frequency
+#define MW_DELTA 1000 //MW offset
 
 /* USER CODE END Private defines */
 
