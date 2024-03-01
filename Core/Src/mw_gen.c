@@ -88,7 +88,8 @@ struct MW_struct
   uint8_t next_state;             /* current MW state */
   uint8_t k;
   uint32_t NINT;
-  uint32_t NFRAC_start; //ramp starting value of fractional register
+  uint32_t NFRAC_hyperfine;
+  uint32_t NFRAC_start_of_ramp; //ramp starting value of fractional register
   uint32_t num_steps;
   uint32_t step_size; //in multiples of minimum step
   uint32_t pop_cycles_per_point;
@@ -178,9 +179,11 @@ __attribute__((section(".itcm"))) static void print_mw_sweep_settings (void);
 #endif //MW_DEBUG
 __attribute__((section(".itcm"))) bool calc_defined_step_MW_sweep(const double centre_freq, const double span, const uint32_t pop_cycles_per_point, const uint32_t num_points_req);
 __attribute__((section(".itcm"))) bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
+__attribute__((section(".itcm"))) static void calc_hyperfine_settings(const double centre_freq);
 __attribute__((section(".itcm"))) static const uint32_t calculate_k(const double frequency);
 __attribute__((section(".itcm"))) void start_POP_calibration(const bool cal_only);
 __attribute__((section(".itcm"))) static const bool start_MW_sweep(const bool single_sweep);
+__attribute__((section(".itcm"))) void start_POP_tuning(const double centre_freq);
 __attribute__((section(".itcm"))) void start_continuous_MW_sweep(void);
 __attribute__((section(".itcm"))) void stop_MW_operation(void);
 __attribute__((section(".itcm"))) const bool MW_update(void);
@@ -504,14 +507,15 @@ void set_frequency_hz(const double fo) {
 #endif //OPTIMISED_FOR_3_035GHZ_GENERATION
 #ifndef OPTIMISED_FOR_3_035GHZ_GENERATION
 	/* Generic code that will work for any frequency supported by HMC835 */
+	uint32_t k = calculate_k(fo);
 	/* For the k divider we need to find the smallest even integer or use a max of 62*/
-	uint32_t k = VCO_MAX_FREQ / fo;
-
-	if (k != 1) {
-		while (k > 62 || k % 2) {
-			k = k - 1;
-		}
-	}
+//	uint32_t k = VCO_MAX_FREQ / fo;
+//
+//	if (k != 1) {
+//		while (k > 62 || k % 2) {
+//			k = k - 1;
+//		}
+//	}
 #endif //OPTIMISED_FOR_3_035GHZ_GENERATION
 
 	/* Calculate the N division ratio */
@@ -633,7 +637,7 @@ void set_frequency_hz(const double fo) {
 	printf("state: %u \r\n", mw_sweep_settings.next_state);
   	printf("k: %u \r\n", mw_sweep_settings.k);
   	printf("NINT: %lu \r\n", mw_sweep_settings.NINT);
-  	printf("NFRAC_start: %lu \r\n", mw_sweep_settings.NFRAC_start);
+  	printf("NFRAC_start_of_ramp: %lu \r\n", mw_sweep_settings.NFRAC_start_of_ramp);
   	printf("num_steps: %lu \r\n", mw_sweep_settings.num_steps);
   	printf("step_size: %lu \r\n", mw_sweep_settings.step_size);
   	printf("pop_cycles_per_point: %lu \r\n", mw_sweep_settings.pop_cycles_per_point);
@@ -688,7 +692,7 @@ bool calc_defined_step_MW_sweep(const double centre_freq, const double span, con
 	/* Calculate the N division ratio, extracting the fractional and integer parts */
 	const double N = ((start_freq * mw_sweep_settings.k) / REF_FREQ);
 	mw_sweep_settings.NINT = N;
-	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
+	mw_sweep_settings.NFRAC_start_of_ramp = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
 
 	/* Calculate dwell time at each MW frequency */
 	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
@@ -804,12 +808,25 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
 	/* Calculate the N division ratio, extracting the fractional and integer parts */
 	const double N = ((start_freq * mw_sweep_settings.k) / REF_FREQ);
 	mw_sweep_settings.NINT = N;
-	mw_sweep_settings.NFRAC_start = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
+	mw_sweep_settings.NFRAC_start_of_ramp = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
 	mw_sweep_settings.current_point = 0;
 	mw_sweep_settings.sweep_period = calc_sweep_time;
 	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
+	N = ((centre_freq * mw_sweep_settings.k) / REF_FREQ);
+	mw_sweep_settings.NFRAC_hyperfine = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
 //	print_mw_sweep_settings();
 	return(true);
+}
+
+/**
+  * @brief Populates the k, integer N, and fractional N values for the hyperfine frequency
+  * @retval None
+  */
+static void calc_hyperfine_settings(const double centre_freq) {
+	mw_sweep_settings.k = calculate_k(centre_freq);
+	const double N = ((centre_freq * mw_sweep_settings.k) / REF_FREQ);
+	mw_sweep_settings.NINT = N;
+	mw_sweep_settings.NFRAC_hyperfine = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
 }
 
 /**
@@ -817,6 +834,7 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
   * @retval k
   */
 static const uint32_t calculate_k(const double frequency) {
+	/* For the k divider we need to find the smallest even integer or use a max of 62*/
 	uint32_t k = VCO_MAX_FREQ / frequency;
 
 	if (k != 1) {
@@ -870,7 +888,7 @@ static const bool start_MW_sweep(const bool single_sweep) {
 
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
 //	set_frequency(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k, MANUAL_MUTE); //program initial MW frequency
-	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start, mw_sweep_settings.k); //program initial MW frequency
+	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_start_of_ramp, mw_sweep_settings.k); //program initial MW frequency
 	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
 	mw_sweep_settings.next_state = MW_RAMP_DWELL;
 	mw_sweep_settings.current_point = 0; //currently on at start of ramp i.e. point 0
@@ -889,23 +907,23 @@ static const bool start_MW_sweep(const bool single_sweep) {
   * @brief  Starts the MW tuning process
   * @retval None
   */
-void start_POP_tuning(void) {
+void start_POP_tuning(const double centre_freq) {
 	stop_laser_operation(); //releases timers and ensures that sample pulse is generated for ADC
+	calc_hyperfine_settings(centre_freq); //calculates HMC835 k and N settings and places them in mw_sweep_settings
 	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
 	mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
+//	if (test for straying above bounds) {
+//		printf("LOSS OF MW LOCK\r\n");
+//		printf("Error message: %u\r\n", variable);
+//		Error_Handler();
+//	}
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
-	if (laser_mod_value > (LASER_MAX_MOD - LASER_STEP)) {
-	    printf("LOSS OF LASER LOCK\r\n");
-	    printf("Modulation value outside bounds: %u\r\n", laser_mod_value);
-		Error_Handler();
-	}
-	laser_mod_value += POP_STEP;
+	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_hyperfine + POP_STEP, mw_sweep_settings.k); //MW f set above hyperfine
 	start_timer(MW_TIMER); //Restart timer for MW settling time time
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 	reset_adc_samples(); //reset ADC samples including sample count
-	#ifdef LASER_VERBOSE
-	printf("Started laser tuning\r\n");
-	#endif //LASER_VERBOSE
+	#ifdef POP_VERBOSE
+	printf("POP tuning - MW sampling above hyperfine\r\n");
+	#endif //POP_VERBOSE
 }
 
 /**
@@ -959,11 +977,11 @@ const bool MW_update(void) {
 				adc_polled_above = adc_averaged_val;
 				mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
 				mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
-				if (laser_mod_value < LASER_MIN_MOD + (2 * LASER_STEP)) {
-				    printf("LOSS OF LASER LOCK\r\n");
-				    printf("Modulation value outside bounds: %u\r\n", laser_mod_value);
-					Error_Handler();
-				}
+//				if (test for straying below bounds) {
+//				    printf("LOSS OF MW LOCK\r\n");
+//				    printf("Error message: %u\r\n", variable);
+//					Error_Handler();
+//				}
 				laser_mod_value = laser_mod_value - (2 * LASER_STEP);
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 				reset_adc_samples(); //reset ADC samples including sample count
@@ -1059,7 +1077,7 @@ const bool MW_update(void) {
 				/* next MW step */
 				mw_sweep_settings.current_point++; //increment point counter
 				//calculate the new MW frequency and program Hittite with new NFRAC
-				uint32_t local_NFRAC = mw_sweep_settings.NFRAC_start + mw_sweep_settings.step_size * mw_sweep_settings.current_point;
+				uint32_t local_NFRAC = mw_sweep_settings.NFRAC_start_of_ramp + mw_sweep_settings.step_size * mw_sweep_settings.current_point;
 				set_freq_regs(mw_sweep_settings.NINT, local_NFRAC, mw_sweep_settings.k); //program new MW frequency
 				start_timer(MW_TIMER); //Restart timer for MW stabilisation time
 				#ifdef RAMP_DAC
