@@ -26,9 +26,9 @@
 
 /* Defines ------------------------------------------------------------*/
 #define LASER_MIN_MOD 10 //read-only
-//#define LASER_MAX_MOD 4000 //corresponds to 3.3V DAC output for 35mA LD current
-#define LASER_MAX_MOD 3500 //corresponds to 3.3V DAC output for 35mA LD current
-#define LOCK_TO_DIP 2 //should be 2 or 3 to select the F=? absorption dip
+//#define LASER_MAX_MOD 1738 //corresponds to 1.4V DAC output for 35mA LD current
+#define LASER_MAX_MOD 3000 //trying a higher voltage due to low modulation sensitivity
+#define LOCK_TO_DIP 3 //should be 2 or 3 to select the F=? absorption dip
 #define DIP_THRESHOLD 248 //approx 200mV
 #define LASER_STAB_US 1000 //1ms time for LD temp to stabilise after polling
 
@@ -114,7 +114,7 @@ void start_laser_ramp(void) {
 	if (ADC_SAMPLES > 1) moving_average_offset = ADC_SAMPLES / 2;
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
 	start_timer(MW_TIMER); //using MW for 1s delay
-    printf("1s delay to allow LD temperature to equalise.\r\n");
+    printf("LD temperature equalising.\r\n");
 }
 
 /**
@@ -191,7 +191,7 @@ const bool laser_update(void) {
 			HAL_GPIO_WritePin(SCOPE_TRIG_OUT_GPIO_Port, SCOPE_TRIG_OUT_Pin, GPIO_PIN_RESET); // Sets trigger output low
 			reset_adc_samples(); //reset ADC samples including sample count
 			start_timer(SWEEP_TIMER); //
-		    printf("Starting laser frequency scan.\r\n");
+		    printf("Starting laser frequency scan. Allow %.2g seconds \r\n", (float)((LASER_MAX_MOD - LASER_MIN_MOD) / 186));
 		    //break statement not required here
 
 		case LASER_RAMP_PHASE_TWO: //finding F=2 dip

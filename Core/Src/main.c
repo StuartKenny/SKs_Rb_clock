@@ -145,7 +145,7 @@ extern bool calc_defined_step_MW_sweep(const double centre_freq, const double sp
 extern bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
 extern void stop_MW_operation(void);
 extern const bool MW_update(void);
-extern void start_POP_calibration(const bool cal_only);
+extern void start_POP_cycle_calibration(const bool cal_only);
 extern void start_continuous_MW_sweep(void);
 //extern uint32_t measure_POP_cycle(void);
 //extern void initiate_MW_calibration_sweep(const uint32_t POP_period_us);
@@ -1362,7 +1362,7 @@ void measure_POP_cycle_time (void)
 	 */
 	stop_laser_tuning(); //ensure MW_timer not being used and laser tuning pin high
 	start_timer(SWEEP_TIMER); //Using sweep timer for 3s timeout
-	start_POP_calibration(true);
+	start_POP_cycle_calibration(true);
 	//loop here until period of POP cycle has been measured or 3s has elapsed
 	//When correctly connected, POP cycle measurement should take 1.3s
 	while (!POP_period_us && (check_timer(SWEEP_TIMER) < 3000000)) {

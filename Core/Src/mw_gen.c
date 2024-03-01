@@ -83,7 +83,7 @@ enum sweep_mode
 
 struct MW_struct
 {
-  bool valid;
+//  bool valid;
   uint8_t state;             /* current MW state */
   uint8_t next_state;             /* current MW state */
   uint8_t k;
@@ -181,7 +181,7 @@ __attribute__((section(".itcm"))) bool calc_defined_step_MW_sweep(const double c
 __attribute__((section(".itcm"))) bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const double requested_sweep_period, const bool scope_sync_time);
 __attribute__((section(".itcm"))) static void calc_hyperfine_settings(const double centre_freq);
 __attribute__((section(".itcm"))) static const uint32_t calculate_k(const double frequency);
-__attribute__((section(".itcm"))) void start_POP_calibration(const bool cal_only);
+__attribute__((section(".itcm"))) void start_POP_cycle_calibration(const bool cal_only);
 __attribute__((section(".itcm"))) static const bool start_MW_sweep(const bool single_sweep);
 __attribute__((section(".itcm"))) void start_POP_tuning(const double centre_freq);
 __attribute__((section(".itcm"))) void start_continuous_MW_sweep(void);
@@ -367,7 +367,7 @@ uint32_t init_synthesiser(const uint8_t mw_power) {
 	printf("Single frequency output: %.10g Hz \r\n", (double)(HYPERFINE + MW_DELTA));
 	mw_sweep_settings.state = MW_STABILISING;
 	mw_sweep_settings.next_state = MW_FIXED_FREQ;
-	mw_sweep_settings.valid = true; //
+	//mw_sweep_settings.valid = true;
 	//HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); // MW_invalid output low
 	return SUCCESS;
 }
@@ -486,7 +486,7 @@ static void set_freq_regs(const uint32_t integer, const uint32_t fraction, const
 	if (last_fraction == -1 || (last_fraction != fraction)) {
 		synth_writereg(fraction, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  // Fractional register.
 		last_fraction = fraction;
-		mw_sweep_settings.valid = false;
+//		mw_sweep_settings.valid = false;
 	}
 
 }
@@ -632,7 +632,7 @@ void set_frequency_hz(const double fo) {
   */
   static void print_mw_sweep_settings (void) {
   	// Check that I've populated everything
-	printf("state: %u \r\n", mw_sweep_settings.valid);
+	//printf("state: %u \r\n", mw_sweep_settings.valid);
 	printf("state: %u \r\n", mw_sweep_settings.state);
 	printf("state: %u \r\n", mw_sweep_settings.next_state);
   	printf("k: %u \r\n", mw_sweep_settings.k);
@@ -812,8 +812,6 @@ bool calc_fixed_time_MW_sweep(const double centre_freq, const double span, const
 	mw_sweep_settings.current_point = 0;
 	mw_sweep_settings.sweep_period = calc_sweep_time;
 	mw_sweep_settings.stabilise_time = MW_STABILISE_TIME_US; //Global MW stabilisation time
-	N = ((centre_freq * mw_sweep_settings.k) / REF_FREQ);
-	mw_sweep_settings.NFRAC_hyperfine = ((N - mw_sweep_settings.NINT) * (1 << 24)) + 0.5;
 //	print_mw_sweep_settings();
 	return(true);
 }
@@ -849,7 +847,7 @@ static const uint32_t calculate_k(const double frequency) {
   * @brief  Starts the process of measuring the POP period
   * @retval None
   */
-void start_POP_calibration(const bool cal_only) {
+void start_POP_cycle_calibration(const bool cal_only) {
 	/* Requires ADC to be initialised and for HAL_ADC_ConvCpltCallback to be active */
 	if (cal_only == true) {
 		mw_sweep_settings.sweep_mode = POP_CAL_ONLY;
@@ -908,19 +906,19 @@ static const bool start_MW_sweep(const bool single_sweep) {
   * @retval None
   */
 void start_POP_tuning(const double centre_freq) {
-	stop_laser_operation(); //releases timers and ensures that sample pulse is generated for ADC
-	calc_hyperfine_settings(centre_freq); //calculates HMC835 k and N settings and places them in mw_sweep_settings
-	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
-	mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
-//	if (test for straying above bounds) {
+	stop_MW_operation(); //releases timers and ensures that sample pulse is generated for ADC
+//	if (test for straying above bound) {
 //		printf("LOSS OF MW LOCK\r\n");
 //		printf("Error message: %u\r\n", variable);
 //		Error_Handler();
 //	}
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
+	calc_hyperfine_settings(centre_freq); //calculates HMC835 k and N settings and places them in mw_sweep_settings
 	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_hyperfine + POP_STEP, mw_sweep_settings.k); //MW f set above hyperfine
+	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
+	mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
 	start_timer(MW_TIMER); //Restart timer for MW settling time time
-	reset_adc_samples(); //reset ADC samples including sample count
+//	reset_adc_samples(); //reset ADC samples including sample count
 	#ifdef POP_VERBOSE
 	printf("POP tuning - MW sampling above hyperfine\r\n");
 	#endif //POP_VERBOSE
@@ -932,7 +930,7 @@ void start_POP_tuning(const double centre_freq) {
   */
 void start_continuous_MW_sweep(void) {
 	mw_sweep_settings.sweep_mode = CONTINUOUS_SWEEP;
-	start_POP_calibration(false);
+	start_POP_cycle_calibration(false);
 }
 
 /**
@@ -975,60 +973,45 @@ const bool MW_update(void) {
 		case POP_SAMPLE_ABOVE: //POP with elevated MW frequency
 			if(adc_average_updated) {
 				adc_polled_above = adc_averaged_val;
-				mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
-				mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
 //				if (test for straying below bounds) {
 //				    printf("LOSS OF MW LOCK\r\n");
 //				    printf("Error message: %u\r\n", variable);
 //					Error_Handler();
 //				}
-				laser_mod_value = laser_mod_value - (2 * LASER_STEP);
-				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
-				reset_adc_samples(); //reset ADC samples including sample count
+				HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
+//				set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_hyperfine - POP_STEP, mw_sweep_settings.k); //MW f set below hyperfine
+				synth_writereg(mw_sweep_settings.NFRAC_hyperfine - POP_STEP, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  //MW f set below hyperfine
+				mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
+				mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
+				start_timer(MW_TIMER); //Restart timer for MW settling time time
+//				reset_adc_samples(); //reset ADC samples including sample count
+				#ifdef POP_VERBOSE
+				printf("POP tuning - MW sampling above hyperfine\r\n");
+				#endif //POP_VERBOSE
 				action_taken = true;
 			}
 			break;
 		case POP_SAMPLE_BELOW: //POP with reduced MW frequency
-
-//		case LASER_STEPPED_UP:
-//			if(adc_average_updated) {
-//				adc_polled_above = adc_averaged_val;
-//				laser_state = LASER_STEPPED_DOWN;
-//				if (laser_mod_value < LASER_MIN_MOD + (2 * LASER_STEP)) {
-//				    printf("LOSS OF LASER LOCK\r\n");
-//				    printf("Modulation value outside bounds: %u\r\n", laser_mod_value);
+			if(adc_average_updated) {
+				adc_polled_above = adc_averaged_val;
+//				if (test for straying above bounds) {
+//				    printf("LOSS OF MW LOCK\r\n");
+//				    printf("Error message: %u\r\n", variable);
 //					Error_Handler();
 //				}
-//				laser_mod_value = laser_mod_value - (2 * LASER_STEP);
-//				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //
-////				static void set_freq_regs(const uint32_t integer, const uint32_t fraction, const uint32_t vco_divider) {
-//				mw_sweep_settings.NFRAC =+ 8;
-////				}
+				HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_SET); //Sets MW_invalid pin high
+//				set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_hyperfine + POP_STEP, mw_sweep_settings.k); //MW f set above hyperfine
+				synth_writereg(mw_sweep_settings.NFRAC_hyperfine + POP_STEP, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  //MW f set above hyperfine
+				mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
+				mw_sweep_settings.next_state = POP_SAMPLE_ABOVE;
+				start_timer(MW_TIMER); //Restart timer for MW settling time time
 //				reset_adc_samples(); //reset ADC samples including sample count
-//				action_taken = true;
-//			}
-//			break;
-//		case LASER_STEPPED_DOWN:
-//			if(adc_average_updated) {
-//				adc_polled_below = adc_averaged_val;
-//				laser_mod_value += LASER_STEP; //return laser modulation value to pre-tuned value
-//				action_taken = true;
-//				if (adc_polled_below > adc_polled_above) {
-//					laser_mod_value++; //increase current by incrementing laser modulation value
-//				}
-//				if (adc_polled_above > adc_polled_below) {
-//					laser_mod_value--; //decrease current by decrementing laser modulation value
-//				}
-//				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value);
-//				/* If adding a short delay for LD to stabilise after polling */
-//				laser_state = LASER_TEMP_STABILISING;
-//				start_timer(MW_TIMER); //using MW for short delay
-//				/* Substituted with this if no stabilising time is required after polling
-//				 * laser_state = LASER_ON_FREQ;
-//				 * reset_adc_samples(); //reset ADC samples including sample count
-//				 */
-//			}
-//			break;
+				#ifdef POP_VERBOSE
+				printf("POP tuning - MW sampling above hyperfine\r\n");
+				#endif //POP_VERBOSE
+				action_taken = true;
+			}
+			break;
 
 		case MW_RAMP_DWELL: //valid MW output waiting for end of dwell time
 			if (check_timer(MW_TIMER) < mw_sweep_settings.dwell_time) return(false); //Still waiting
@@ -1071,7 +1054,7 @@ const bool MW_update(void) {
 					mw_sweep_settings.state = MW_STOPPED;
 				} else {
 					start_MW_sweep(false); //restart the next MW sweep without updating mw_sweep_settings.sweep_mode
-//					start_POP_calibration(false); //check the POP period and restart the next MW sweep without updating mw_sweep_settings.sweep_mode
+//					start_POP_cycle_calibration(false); //check the POP period and restart the next MW sweep without updating mw_sweep_settings.sweep_mode
 				}
 			} else {
 				/* next MW step */
