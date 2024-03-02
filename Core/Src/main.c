@@ -71,7 +71,8 @@ UART_HandleTypeDef huart3;
 /* USER CODE BEGIN PV */
 static const uint32_t ERROR_LED_DELAY = 1000; // 100 ms
 
-extern SweepSettings const sweep_settings;
+//extern SweepSettings const sweep_settings;
+extern bool absorption_dip_locked;
 
 extern uint32_t _siitcm;
 extern uint32_t _sitcm;
@@ -376,6 +377,12 @@ int main(void)
 //	printf("Sending test packets\r\n");
 //	one_off();
 #endif //ETHERNET_FOR_LDC501
+
+	stop_MW_operation();
+	start_laser_ramp();
+	while(!absorption_dip_locked) {
+		laser_update();
+	}
 
   /* USER CODE END 2 */
 

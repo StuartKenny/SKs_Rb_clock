@@ -110,6 +110,7 @@ struct MW_struct mw_sweep_settings;  //create a structure to store the sweep set
 //Timers are declared in main.h and defined in main.c
 static const uint32_t SYNTH_SPI_BITS = 32;
 static const uint32_t SYNTH_ID = 0xC7701A;
+static uint32_t POP_tuning_time = 0;
 
 //The following timer constants are used to program a 16-bit register i.e. 65535 max
 //static const uint32_t MW_STABILISE_TIME_US = 10000; // 10ms for MW output to stabilise before signalling FPGA
@@ -917,6 +918,7 @@ void start_POP_tuning(const double centre_freq) {
 	set_freq_regs(mw_sweep_settings.NINT, mw_sweep_settings.NFRAC_hyperfine + POP_STEP, mw_sweep_settings.k); //MW f set above hyperfine
 	mw_sweep_settings.state = MW_STABILISING; //waiting for MW output to stabilise
 	mw_sweep_settings.next_state = POP_SAMPLE_BELOW;
+	start_timer(SWEEP_TIMER); //Restart timer for MW settling time time
 	start_timer(MW_TIMER); //Restart timer for MW settling time time
 //	reset_adc_samples(); //reset ADC samples including sample count
 	#ifdef POP_VERBOSE
@@ -939,6 +941,7 @@ void start_continuous_MW_sweep(void) {
   */
 void stop_MW_operation(void) {
 	mw_sweep_settings.sweep_mode = MW_STOPPED;
+	synth_writereg(mw_sweep_settings.NFRAC_hyperfine, FRACTIONAL_FREQUENCY_REGISTER, 0x0, VERIFY);  //MW f set to hyperfine
 	stop_timer(MW_TIMER);
 	HAL_GPIO_WritePin(MW_INVALID_GPIO_Port, MW_INVALID_Pin, GPIO_PIN_RESET); //Ensures the ADC sample pulse is being generated
 }

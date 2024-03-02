@@ -1,4 +1,4 @@
-../Core/Src/laserlock.c:83:6:start_laser_tuning	2
-../Core/Src/laserlock.c:106:6:start_laser_ramp	1
-../Core/Src/laserlock.c:124:6:stop_laser_tuning	1
-../Core/Src/laserlock.c:136:12:laser_update	28
+../Core/Src/laserlock.c:81:6:start_laser_tuning	2
+../Core/Src/laserlock.c:104:6:start_laser_ramp	1
+../Core/Src/laserlock.c:122:6:stop_laser_tuning	1
+../Core/Src/laserlock.c:134:12:laser_update	24

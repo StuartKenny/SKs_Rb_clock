@@ -27,7 +27,7 @@
 /* Defines ------------------------------------------------------------*/
 #define LASER_MIN_MOD 10 //read-only
 //#define LASER_MAX_MOD 1738 //corresponds to 1.4V DAC output for 35mA LD current
-#define LASER_MAX_MOD 3000 //trying a higher voltage due to low modulation sensitivity
+#define LASER_MAX_MOD 2500 //trying a higher voltage due to low modulation sensitivity
 #define LOCK_TO_DIP 3 //should be 2 or 3 to select the F=? absorption dip
 #define DIP_THRESHOLD 248 //approx 200mV
 #define LASER_STAB_US 1000 //1ms time for LD temp to stabilise after polling
@@ -42,8 +42,7 @@ enum laser_states
   LASER_RAMP_PHASE_ONE,
   LASER_RAMP_PHASE_TWO,
   LASER_RAMP_PHASE_THREE,
-  LASER_RAMP_PHASE_FOUR,
-  LASER_RAMP_PHASE_FIVE
+  LASER_RAMP_PHASE_FOUR
 };
 
 /* Variables ---------------------------------------------------------*/
@@ -54,9 +53,8 @@ static uint16_t saved_mod_value = 0; //for temporary storage of a current modula
 uint16_t moving_average_offset = 0; //half the width of the moving average
 static uint16_t F2_mod_value = 0; //for storing the initial current modulation value of the F=2 absorption dip
 static uint16_t F3_mod_value = 0; //for storing the initial current modulation value of the F=3 absorption dip
-//static uint32_t max_adc_val = 0; // for temporary storage of the largest adc reading
-//static uint32_t min_adc_val = 0xffffffff; //for temporary storage of the smallest adc reading
-//extern volatile uint16_t sample_count; //counts number of times the sample line drives the ADC trigger high, updated when ADC completes conversion
+bool absorption_dip_locked = 0; //for signalling that the laser is locked to an absorption dip
+
 extern uint32_t adc_averaged_val, adc_averaged_max, adc_averaged_min; //used to store adc3 readings
 extern bool adc_average_updated; //allows polling without needing to compare previous values
 extern uint32_t adc_polled_above, adc_polled_below; //used to store adc3 readings
@@ -175,7 +173,8 @@ const bool laser_update(void) {
 				}
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value);
 				/* If adding a short delay for LD to stabilise after polling */
-				laser_state = LASER_TEMP_STABILISING;
+//				laser_state = LASER_TEMP_STABILISING; //for normal operation
+				laser_state = LASER_STEPPED_UP; //for cycling as part of a stability test
 				start_timer(MW_TIMER); //using MW for short delay
 				/* Substituted with this if no stabilising time is required after polling
 				 * laser_state = LASER_ON_FREQ;
@@ -207,7 +206,7 @@ const bool laser_update(void) {
 				 */
 				if ((adc_averaged_val - adc_averaged_min) >= DIP_THRESHOLD ) {//if the latest reading is significantly above the minimum
 					F2_mod_value = saved_mod_value - moving_average_offset; //record the modulation value for the F=2 dip
-					adc_averaged_min = 0xFFFF; //reset the saved minimum
+//					adc_averaged_min = 0xFFFF; //reset the saved minimum
 					laser_state = LASER_RAMP_PHASE_THREE;
 				}
 				laser_mod_value += LASER_STEP; //next laser step
@@ -224,38 +223,16 @@ const bool laser_update(void) {
 				action_taken = true;
 			}
 			break;
-		case LASER_RAMP_PHASE_THREE: //finding F=3 dip
+
+		case LASER_RAMP_PHASE_THREE: //rest of sweep including finding F=3 dip
 			if(adc_average_updated) {
 				if (adc_averaged_val < adc_averaged_min) {//if new minimum detected
 					adc_averaged_min = adc_averaged_val; //record new mininum
 					saved_mod_value = laser_mod_value; //record the associated modulation value
 				}
-				/* Detect when we've passed F=3 dip
-				 * If the latest reading is significantly higher than the minimum
-				 * then record F=3
-				 */
-				if ((adc_averaged_val - adc_averaged_min) >= DIP_THRESHOLD) {//if the latest reading is significant above the minimum
+				laser_mod_value += LASER_STEP; //next laser step
+				if (laser_mod_value >= LASER_MAX_MOD) {//if no longer in range
 					F3_mod_value = saved_mod_value - moving_average_offset; //record the modulation value for the F=3 dip
-					laser_state = LASER_RAMP_PHASE_FOUR;
-				}
-				laser_mod_value += LASER_STEP; //next laser step
-				if (laser_mod_value >= LASER_MAX_MOD) {//if no longer in range
-					printf("Have completed absorption scan without detecting F=3 DIP.\r\n");
-					printf("DIP_THRESHOLD: %u\r\n", DIP_THRESHOLD);
-					sweep_time_s = (double) (stop_timer(SWEEP_TIMER)) / 1000000;
-					printf("Sweep complete in %.3g s.\r\n", sweep_time_s);
-					Error_Handler();
-				}
-				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //set DAC output pin
-				//reset_adc_samples(); //reset ADC samples including sample count
-				adc_average_updated = false; //clears new reading flag
-				action_taken = true;
-			}
-			break;
-		case LASER_RAMP_PHASE_FOUR: //finishing the current sweep
-			if(adc_average_updated) {
-				laser_mod_value += LASER_STEP; //next laser step
-				if (laser_mod_value >= LASER_MAX_MOD) {//if no longer in range
 					sweep_time_s = (double) (stop_timer(SWEEP_TIMER)) / 1000000;
 					printf("Absorption spectroscopy complete in %.3g s.\r\n", sweep_time_s);
 					printf("F=2 dip detected at step %u.\r\n", F2_mod_value);
@@ -270,7 +247,8 @@ const bool laser_update(void) {
 						Error_Handler();
 					}
 					printf("F=%u dip selected.\r\n", LOCK_TO_DIP);
-					laser_state = LASER_TEMP_STABILISING;
+					laser_state = LASER_RAMP_PHASE_FOUR;
+					start_timer(MW_TIMER); //start 1s delay to allow laser to settle
 				}
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, laser_mod_value); //set DAC output pin
 				//reset_adc_samples(); //reset ADC samples including sample count
@@ -278,17 +256,20 @@ const bool laser_update(void) {
 				action_taken = true;
 			}
 			break;
-		case LASER_RAMP_PHASE_FIVE: //waiting for the LD temperature to stabilise
+
+		case LASER_RAMP_PHASE_FOUR: //waiting for the LD temperature to stabilise
 			if (check_timer(MW_TIMER) < 1000000) return(false); //Still waiting, no action taken
 			action_taken = true;
 			stop_timer(MW_TIMER); //release MW_timer
 			laser_state = LASER_ON_FREQ;
 			reset_adc_samples(); //reset ADC samples including sample count
 		    printf("LD temperature stabilised.\r\n");
+		    absorption_dip_locked = 1;
+		    break;
 
 		default: // Other state
 	       printf("laser_update has detected illegal state: %u \r\n", laser_state);
-	       printf("local version: %u \r\n", local_copy_of_laser_state);
+	       printf("state: %u \r\n", local_copy_of_laser_state);
 	}
     return(action_taken);
 }
